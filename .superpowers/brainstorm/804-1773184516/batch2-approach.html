@@ -1,0 +1,47 @@
+<h2>Batch 2: Layer Groups — Architecture Approach</h2>
+<p class="subtitle">The flat-list assumption is deeply embedded (100+ index-based accesses). How do we add groups?</p>
+
+<div class="options">
+  <div class="option" data-choice="flat-with-depth" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Flat List + Depth Property (Recommended)</h3>
+      <p>Keep layers as a flat list. Add <code>depth: int</code> and <code>is_group: bool</code> properties. A "group" is a special entry in the list — its children are the subsequent items with higher depth, until depth returns to the group's level.</p>
+      <p><strong>Pros:</strong> Minimal changes to existing code. Index-based access still works. Timeline UI just needs indentation. Compositing walks the list with a stack.</p>
+      <p><strong>Cons:</strong> Reordering layers across groups requires care. Not a "pure" tree — conventions enforced by code, not structure.</p>
+      <p><strong>This is how Aseprite does it internally.</strong></p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Impact</h4><ul>
+          <li>~20 lines changed in layer.py</li>
+          <li>~50 lines in flatten_layers</li>
+          <li>~30 lines in timeline.py (indent)</li>
+          <li>~20 lines in project.py (serialize depth)</li>
+          <li>Existing tests mostly unchanged</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="full-tree" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Full Tree Structure</h3>
+      <p>Replace <code>list[Layer]</code> with a tree of <code>Layer | LayerGroup</code> nodes. Each group contains a <code>children</code> list. Provide a <code>flatten_to_display_list()</code> for backward compat.</p>
+      <p><strong>Pros:</strong> Structurally correct. Group boundaries enforced by data structure. Clean compositing via recursion.</p>
+      <p><strong>Cons:</strong> Massive refactor. Every index-based access needs migration. Timeline sync across frames becomes complex. Undo/redo must store layer IDs instead of indices. ~500+ lines of changes.</p>
+      <div class="pros-cons">
+        <div class="cons"><h4>Impact</h4><ul>
+          <li>Rewrite layer.py, animation.py</li>
+          <li>Rewrite timeline.py rendering</li>
+          <li>Update all 100+ index accesses in app.py</li>
+          <li>New serialization format</li>
+          <li>Most existing tests break</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:20px; padding:16px; border:1px solid #444; border-radius:8px; background:#1a1a2e;">
+  <p style="color:#e0e0e0; margin:0;"><strong>My strong recommendation is A.</strong> It gives you real nested compositing (groups composite their children before blending with the layer below) while keeping the codebase stable. Aseprite — the gold standard — uses this exact approach. Option B is a multi-day rewrite with high regression risk for no user-visible benefit.</p>
+</div>

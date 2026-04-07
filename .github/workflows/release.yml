@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Verify version matches source
+        shell: bash
+        run: |
+          SOURCE_VER=$(python -c "import re; print(re.search(r\"__version__\s*=\s*['\\\"]([^'\\\"]+)['\\\"]\", open('src/__init__.py').read()).group(1))")
+          TAG_VER="${{ steps.version.outputs.version }}"
+          if [ "$SOURCE_VER" != "$TAG_VER" ]; then
+            echo "ERROR: Tag version ($TAG_VER) does not match src/__init__.py ($SOURCE_VER)"
+            exit 1
+          fi
+          echo "Version verified: $SOURCE_VER"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Run tests
+        run: python -m pytest tests/ -x -q
+
+      - name: Build with PyInstaller
+        run: python -m PyInstaller RetroSprite.spec --noconfirm
+
+      - name: Create portable zip
+        shell: pwsh
+        run: Compress-Archive -Path dist\RetroSprite\* -DestinationPath RetroSprite_Portable.zip
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          echo "C:\Program Files (x86)\Inno Setup 6" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      - name: Build installer
+        run: iscc /DMyAppVersion=${{ steps.version.outputs.version }} installer.iss
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: RetroSprite v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            RetroSprite_Portable.zip
+            installer_output/RetroSprite_Setup.exe

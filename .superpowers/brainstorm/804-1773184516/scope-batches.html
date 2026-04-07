@@ -1,0 +1,35 @@
+<h2>How should we batch these 14 features?</h2>
+<p class="subtitle">Features cluster naturally by subsystem. Pick the grouping that makes sense, or suggest changes.</p>
+
+<div class="options">
+  <div class="option" data-choice="batch-plan" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>5 Focused Batches (Recommended)</h3>
+      <p><strong>Batch 1 — Selection & Brushes:</strong> Lasso/polygon select, selection ops (add/subtract/intersect), custom brushes</p>
+      <p><strong>Batch 2 — Layer Enhancements:</strong> Blend modes (multiply, screen, overlay...), layer groups/folders</p>
+      <p><strong>Batch 3 — Drawing Modes:</strong> Tiled/seamless mode, ink modes (alpha lock, behind), color ramp generation</p>
+      <p><strong>Batch 4 — Advanced Tools:</strong> RotSprite rotation, non-destructive layer effects (outline, shadow), tilemap layers</p>
+      <p><strong>Batch 5 — Infrastructure:</strong> Scripting/plugin API, CLI/batch export</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="three-batches" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>3 Larger Batches</h3>
+      <p><strong>Batch 1 — Core Tools:</strong> Lasso, selection ops, custom brushes, ink modes, color ramps, tiled mode</p>
+      <p><strong>Batch 2 — Layer System:</strong> Blend modes, layer groups, layer effects, tilemap layers</p>
+      <p><strong>Batch 3 — Platform:</strong> RotSprite, scripting API, CLI export</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="priority-only" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Top 6 Only (Ship Fast)</h3>
+      <p>Lasso, selection ops, custom brushes, blend modes, tiled mode, RotSprite</p>
+      <p>Skip: layer groups, ink modes, color ramps, layer effects, tilemap, scripting, CLI</p>
+    </div>
+  </div>
+</div>

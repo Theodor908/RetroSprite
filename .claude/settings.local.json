@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Program Files \\(x86\\)/Inno Setup 6/**)",
+      "Read(//c/Program Files/Inno Setup 6/**)",
+      "Bash(ls -lhS /c/Users/vasil/Desktop/RetroSprite/src/*.py)",
+      "Bash(ls -lh /c/Users/vasil/Desktop/RetroSprite/src/ui/*.py)",
+      "Bash(wc -l C:/Users/vasil/Desktop/RetroSprite/src/*.py)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -ri \"claude\\\\|superpowers\\\\|anthropic\" C:/Users/vasil/Desktop/RetroSprite/*.md C:/Users/vasil/Desktop/RetroSprite/docs/*.md C:/Users/vasil/Desktop/RetroSprite/src/*.py)",
+      "Bash(python:*)",
+      "Bash(ls C:/Users/vasil/Desktop/RetroSprite/*.spec)",
+      "Bash(git -C \"C:/Users/vasil/Desktop/RetroSprite\" check-ignore RetroSprite.spec)",
+      "Bash(echo \"exit: $?\")",
+      "WebSearch",
+      "Bash(cp /c/Users/vasil/Desktop/pen.gif /c/Users/vasil/Desktop/RetroSprite/assets/)",
+      "Bash(cp /c/Users/vasil/Desktop/fill.gif /c/Users/vasil/Desktop/RetroSprite/assets/)",
+      "Bash(cp /c/Users/vasil/Desktop/anim.gif /c/Users/vasil/Desktop/RetroSprite/assets/)",
+      "Bash(cp /c/Users/vasil/Desktop/effect.gif /c/Users/vasil/Desktop/RetroSprite/assets/)",
+      "WebFetch(domain:orama-interactive.github.io)",
+      "WebFetch(domain:pixelorama.org)",
+      "WebFetch(domain:www.aseprite.org)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(find:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(grep:*)",
+      "Bash(cp C:/Users/vasil/Desktop/frame_tags.gif C:/Users/vasil/Desktop/RetroSprite/assets/frame_tags.gif)",
+      "Bash(cp C:/Users/vasil/Desktop/transform.gif C:/Users/vasil/Desktop/RetroSprite/assets/transform.gif)",
+      "Bash(cp C:/Users/vasil/Desktop/tilemap.gif C:/Users/vasil/Desktop/RetroSprite/assets/tilemap.gif)",
+      "Bash(cp C:/Users/vasil/Desktop/text.gif C:/Users/vasil/Desktop/RetroSprite/assets/text.gif)"
+    ]
+  }
+}

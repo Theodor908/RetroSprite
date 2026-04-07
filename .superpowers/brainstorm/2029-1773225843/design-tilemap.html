@@ -1,0 +1,272 @@
+<h2>Feature 3: Tilemap Layers — Detailed Design</h2>
+<p class="subtitle">Tileset management, tile grid editing, two-mode workflow</p>
+
+<div class="section">
+  <h3>Data Model</h3>
+  <div style="background: #0d1117; border-radius: 8px; padding: 20px;">
+    <pre style="color: #ccc; font-family: Consolas, monospace; font-size: 13px; line-height: 1.6; margin: 0;">
+<span style="color: #76ff03;">class Tileset:</span>
+    name: str                          <span style="color: #888;"># e.g. "Dungeon Tiles"</span>
+    tile_width: int                    <span style="color: #888;"># e.g. 16</span>
+    tile_height: int                   <span style="color: #888;"># e.g. 16</span>
+    tiles: list[np.ndarray]            <span style="color: #888;"># list of (tile_h, tile_w, 4) uint8 arrays</span>
+                                       <span style="color: #888;"># index 0 = empty/transparent tile (always)</span>
+
+    <span style="color: #888;"># Operations:</span>
+    add_tile(pixels) -> int            <span style="color: #888;"># returns new tile index</span>
+    remove_tile(index)                 <span style="color: #888;"># removes + reindexes references</span>
+    update_tile(index, pixels)         <span style="color: #888;"># edit tile content (live update)</span>
+    find_matching(pixels) -> int|None  <span style="color: #888;"># find tile with identical pixels</span>
+    import_from_image(img, tw, th)     <span style="color: #888;"># auto-slice image into tiles</span>
+
+<span style="color: #76ff03;">class TileRef:</span>
+    index: int           <span style="color: #888;"># tile index in tileset (0 = empty)</span>
+    flip_x: bool         <span style="color: #888;"># horizontal flip</span>
+    flip_y: bool         <span style="color: #888;"># vertical flip</span>
+    <span style="color: #888;"># Packed as uint32: [flip_y:1][flip_x:1][unused:14][index:16]</span>
+
+<span style="color: #76ff03;">class TilemapLayer(Layer):</span>
+    tileset: Tileset                   <span style="color: #888;"># reference to tileset</span>
+    grid: list[list[TileRef]]          <span style="color: #888;"># 2D grid of tile references</span>
+    grid_cols: int                     <span style="color: #888;"># canvas_width // tile_width</span>
+    grid_rows: int                     <span style="color: #888;"># canvas_height // tile_height</span>
+    edit_mode: str                     <span style="color: #888;"># "pixels" | "tiles"</span>
+    pixel_sub_mode: str                <span style="color: #888;"># "auto" | "manual"</span>
+
+    <span style="color: #888;"># Rendering: resolves grid → pixel buffer</span>
+    def render_to_pixels(self) -> np.ndarray:
+        result = np.zeros((H, W, 4), dtype=np.uint8)
+        for row, col in grid:
+            ref = grid[row][col]
+            if ref.index == 0: continue
+            tile_pixels = tileset.tiles[ref.index]
+            if ref.flip_x: tile_pixels = np.flip(tile_pixels, axis=1)
+            if ref.flip_y: tile_pixels = np.flip(tile_pixels, axis=0)
+            blit(result, tile_pixels, col * tile_w, row * tile_h)
+        return result
+
+    <span style="color: #888;"># Overrides Layer.pixels property for flatten_layers() compatibility</span>
+    @property
+    def pixels(self) -> PixelGrid:
+        return PixelGrid.from_array(self.render_to_pixels())
+    </pre>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Two Editing Modes</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <div style="background: #1a1a2e; border: 2px solid #00d4ff; border-radius: 8px; padding: 16px;">
+      <h3 style="color: #00d4ff; margin-top: 0;">Draw Pixels Mode (default)</h3>
+      <p style="color: #aaa; font-size: 12px;">Edit the tile content directly. All instances of that tile update live.</p>
+      <div style="background: #0d0d1a; border-radius: 4px; padding: 12px; margin: 8px 0;">
+        <p class="label">Auto Sub-Mode (default)</p>
+        <ul style="color: #ccc; font-size: 13px; margin: 0;">
+          <li>Draw pixels normally — feels like a regular layer</li>
+          <li>When you modify pixels in a tile cell, check if result matches existing tile</li>
+          <li>If match found → reuse that tile index</li>
+          <li>If no match → create new tile in tileset</li>
+          <li>Unused tiles auto-removed on save/cleanup</li>
+        </ul>
+      </div>
+      <div style="background: #0d0d1a; border-radius: 4px; padding: 12px;">
+        <p class="label">Manual Sub-Mode</p>
+        <ul style="color: #ccc; font-size: 13px; margin: 0;">
+          <li>Draw pixels → updates the tile definition directly</li>
+          <li>ALL instances of that tile update (Pyxel Edit live update)</li>
+          <li>No new tiles created, no reindexing</li>
+          <li>Best for refining a fixed tileset</li>
+        </ul>
+      </div>
+    </div>
+    <div style="background: #1a1a2e; border: 2px solid #76ff03; border-radius: 8px; padding: 16px;">
+      <h3 style="color: #76ff03; margin-top: 0;">Draw Tiles Mode</h3>
+      <p style="color: #aaa; font-size: 12px;">Place tiles from the tileset onto the grid. Doesn't modify tile content.</p>
+      <div style="background: #0d0d1a; border-radius: 4px; padding: 12px; margin: 8px 0;">
+        <p class="label">Tool Behavior</p>
+        <ul style="color: #ccc; font-size: 13px; margin: 0;">
+          <li><strong>Pen:</strong> place selected tile at grid cell</li>
+          <li><strong>Eraser:</strong> set cell to empty tile (index 0)</li>
+          <li><strong>Fill:</strong> flood-fill region with selected tile</li>
+          <li><strong>Pick:</strong> pick tile from canvas (set as active tile)</li>
+          <li><strong>Rect:</strong> fill rectangle with selected tile</li>
+          <li><strong>Line:</strong> place tiles in a line</li>
+        </ul>
+      </div>
+      <div style="background: #0d0d1a; border-radius: 4px; padding: 12px;">
+        <p class="label">Tile Transforms</p>
+        <ul style="color: #ccc; font-size: 13px; margin: 0;">
+          <li><strong>Shift+X:</strong> flip selected tile horizontally</li>
+          <li><strong>Shift+Y:</strong> flip selected tile vertically</li>
+          <li>Transforms stored per-cell (TileRef.flip_x/y)</li>
+          <li>Shown in tiles panel as toggle buttons</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div style="background: #0d1117; border: 1px solid #ffab00; border-radius: 8px; padding: 12px; margin-top: 12px;">
+    <p style="color: #ffab00; font-size: 13px; margin: 0;">
+      <strong>Mode Toggle:</strong> Shift+` (same as Pixelorama) or button in toolbar/context bar.
+      Current mode shown in status bar: "PIXELS (Auto)" / "PIXELS (Manual)" / "TILES"
+    </p>
+  </div>
+</div>
+
+<div class="section">
+  <h3>UI: Tiles Panel + Creation Dialog</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <div style="background: #1a1a2e; border: 1px solid #444; border-radius: 8px; padding: 16px;">
+      <p class="label">Tiles Panel (Right Sidebar)</p>
+      <div style="background: #0d0d1a; border-radius: 4px; padding: 10px; font-family: Consolas; font-size: 11px; color: #ccc;">
+        <div style="color: #76ff03; border-bottom: 1px solid #333; padding-bottom: 4px; margin-bottom: 8px; display: flex; justify-content: space-between;">
+          <span>Tiles — Dungeon Tiles</span>
+          <span style="color: #888; font-size: 10px;">16×16</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin-bottom: 8px;">
+          <div style="aspect-ratio: 1; background: #222; border: 1px solid #555; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #666;">∅</div>
+          <div style="aspect-ratio: 1; background: #3a2a1a; border: 2px solid #76ff03; border-radius: 2px;"></div>
+          <div style="aspect-ratio: 1; background: #2a3a4a; border: 1px solid #555; border-radius: 2px;"></div>
+          <div style="aspect-ratio: 1; background: #4a3a2a; border: 1px solid #555; border-radius: 2px;"></div>
+          <div style="aspect-ratio: 1; background: #1a2a1a; border: 1px solid #555; border-radius: 2px;"></div>
+          <div style="aspect-ratio: 1; background: #3a3a4a; border: 1px solid #555; border-radius: 2px;"></div>
+          <div style="aspect-ratio: 1; background: #2a1a1a; border: 1px solid #555; border-radius: 2px;"></div>
+          <div style="aspect-ratio: 1; background: #222; border: 1px dashed #444; border-radius: 2px; display: flex; align-items: center; justify-content: center; color: #555;">+</div>
+        </div>
+        <div style="display: flex; gap: 4px; font-size: 10px;">
+          <span style="background: #333; padding: 2px 6px; border-radius: 2px;">Flip X</span>
+          <span style="background: #333; padding: 2px 6px; border-radius: 2px;">Flip Y</span>
+          <span style="flex: 1;"></span>
+          <span style="background: #333; padding: 2px 6px; border-radius: 2px;">Import</span>
+        </div>
+      </div>
+      <p style="color: #aaa; font-size: 12px; margin-top: 8px;">
+        Shows all tiles in active tileset as a grid.<br>
+        Index 0 = empty (∅). Green border = selected.<br>
+        Click to select tile for placement.<br>
+        Import button: load tileset from image file.
+      </p>
+    </div>
+    <div style="background: #1a1a2e; border: 1px solid #444; border-radius: 8px; padding: 16px;">
+      <p class="label">New Tilemap Layer Dialog</p>
+      <div style="background: #0d0d1a; border-radius: 4px; padding: 12px; font-family: Consolas; font-size: 11px; color: #ccc;">
+        <div style="color: #76ff03; border-bottom: 1px solid #333; padding-bottom: 4px; margin-bottom: 10px;">
+          New Tilemap Layer
+        </div>
+        <div style="margin-bottom: 8px;">
+          <div style="color: #888; font-size: 10px; margin-bottom: 2px;">TILESET</div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span style="background: #222; border: 1px solid #555; padding: 3px 8px; border-radius: 3px; flex: 1;">○ Create New</span>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+            <span style="background: #222; border: 1px solid #555; padding: 3px 8px; border-radius: 3px; flex: 1;">○ Use Existing ▾</span>
+          </div>
+        </div>
+        <div style="margin-bottom: 8px;">
+          <div style="color: #888; font-size: 10px; margin-bottom: 2px;">TILE SIZE</div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span style="background: #222; border: 1px solid #555; padding: 3px 8px; border-radius: 3px; width: 40px;">16</span>
+            <span style="color: #555;">×</span>
+            <span style="background: #222; border: 1px solid #555; padding: 3px 8px; border-radius: 3px; width: 40px;">16</span>
+            <span style="background: #333; padding: 3px 6px; border-radius: 3px; font-size: 10px;">Presets ▾</span>
+          </div>
+          <div style="color: #666; font-size: 10px; margin-top: 2px;">Presets: 8×8 · 16×16 · 24×24 · 32×32</div>
+        </div>
+        <div style="margin-bottom: 8px;">
+          <div style="color: #888; font-size: 10px; margin-bottom: 2px;">NAME</div>
+          <span style="background: #222; border: 1px solid #555; padding: 3px 8px; border-radius: 3px; display: block;">My Tileset</span>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;">
+          <span style="background: #333; padding: 4px 16px; border-radius: 3px;">Cancel</span>
+          <span style="background: #76ff0344; padding: 4px 16px; border-radius: 3px; border: 1px solid #76ff03;">Create</span>
+        </div>
+      </div>
+      <p style="color: #aaa; font-size: 12px; margin-top: 8px;">
+        Option to create new tileset or reuse existing one.<br>
+        Custom tile size with preset dropdown.<br>
+        Tile size locked after creation.
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Canvas Overlay</h3>
+  <div style="background: #1a1a2e; border: 1px solid #444; border-radius: 8px; padding: 16px;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; color: #ccc; font-size: 13px;">
+      <div>
+        <p class="label">When Tilemap Layer Active</p>
+        <ul>
+          <li>Tile grid overlay drawn on canvas (dashed lines, subtle color)</li>
+          <li>Only visible at sufficient zoom (tile ≥ 8px on screen)</li>
+          <li>Current cell highlighted on mouse hover</li>
+          <li>In Tiles mode: cursor shows preview of selected tile</li>
+        </ul>
+      </div>
+      <div>
+        <p class="label">Grid Rendering</p>
+        <ul>
+          <li>Drawn as part of canvas overlay (like pixel grid)</li>
+          <li>Cached — only redrawn on zoom/scroll change</li>
+          <li>Color: semi-transparent cyan to match theme</li>
+          <li>Can be toggled off in View menu</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Tileset Import</h3>
+  <div style="background: #0d1117; border-radius: 8px; padding: 20px;">
+    <pre style="color: #ccc; font-family: Consolas, monospace; font-size: 13px; line-height: 1.6; margin: 0;">
+<span style="color: #76ff03;">def import_tileset_from_image(image_path, tile_w, tile_h) -> Tileset:</span>
+    """Import a tileset image and auto-slice into tiles."""
+    img = Image.open(image_path).convert("RGBA")
+    tileset = Tileset(name=..., tile_width=tile_w, tile_height=tile_h)
+    tileset.tiles.append(np.zeros((tile_h, tile_w, 4)))  <span style="color: #888;"># index 0 = empty</span>
+
+    for y in range(0, img.height, tile_h):
+        for x in range(0, img.width, tile_w):
+            tile = np.array(img.crop((x, y, x+tile_w, y+tile_h)))
+            <span style="color: #888;"># Skip fully transparent tiles</span>
+            if tile[:,:,3].sum() == 0: continue
+            <span style="color: #888;"># Dedup: check if identical tile already exists</span>
+            existing = tileset.find_matching(tile)
+            if existing is None:
+                tileset.add_tile(tile)
+
+    return tileset
+    </pre>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Integration Points</h3>
+  <div style="background: #1a1a2e; border: 1px solid #444; border-radius: 8px; padding: 16px;">
+    <div style="display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; color: #ccc; font-size: 13px;">
+      <span style="color: #76ff03;">flatten_layers()</span>
+      <span>Check isinstance(layer, TilemapLayer) → call render_to_pixels() instead of layer.pixels directly</span>
+
+      <span style="color: #76ff03;">tools.py</span>
+      <span>When tilemap active + tiles mode: Pen/Eraser/Fill/Rect/Line operate on grid cells instead of pixels</span>
+
+      <span style="color: #76ff03;">app.py</span>
+      <span>Track tilemap edit mode state, toggle via Shift+`. Route mouse events to tile-mode or pixel-mode handlers.</span>
+
+      <span style="color: #76ff03;">timeline.py</span>
+      <span>Tilemap layer icon (grid icon) instead of normal layer icon. Right-click menu: "Convert to Pixel Layer" option.</span>
+
+      <span style="color: #76ff03;">right_panel.py</span>
+      <span>Mount TilesPanel when tilemap layer selected, hide when pixel layer selected.</span>
+
+      <span style="color: #76ff03;">project.py v3</span>
+      <span>Serialize tilesets (tiles as PNG data), tilemap grids (2D array of uint32 packed refs). Backward compat: v3 reader, v2/v1 can't load tilemap layers.</span>
+
+      <span style="color: #76ff03;">animation.py</span>
+      <span>TilemapLayer synced across frames like regular layers. Each frame can have different tile grid but same tileset.</span>
+
+      <span style="color: #76ff03;">Layer effects</span>
+      <span>Work on tilemap layers too — effects applied AFTER render_to_pixels() during flatten.</span>
+    </div>
+  </div>
+</div>

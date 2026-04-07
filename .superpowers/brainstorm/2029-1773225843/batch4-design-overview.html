@@ -1,0 +1,101 @@
+<h2>Batch 4 Design — Architecture Overview</h2>
+<p class="subtitle">Three features, how they connect</p>
+
+<div class="section">
+  <h3>Feature Summary</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+    <div style="background: #1a1a2e; border: 2px solid #00d4ff; border-radius: 8px; padding: 16px;">
+      <h3 style="color: #00d4ff; margin-top: 0;">1. RotSprite Rotation</h3>
+      <p style="color: #aaa; font-size: 13px;">Pixel-art-aware rotation with live preview</p>
+      <ul style="color: #ccc; font-size: 13px;">
+        <li>Aseprite-style on-canvas handles</li>
+        <li>Draggable pivot point</li>
+        <li>Shift-snap to 45° increments</li>
+        <li>Algorithm: RotSprite (8× Scale2x → rotate → downscale)</li>
+        <li>Also offers Fast (nearest-neighbor) option</li>
+        <li>Preview-then-apply (non-destructive until Enter)</li>
+      </ul>
+    </div>
+    <div style="background: #1a1a2e; border: 2px solid #e040fb; border-radius: 8px; padding: 16px;">
+      <h3 style="color: #e040fb; margin-top: 0;">2. Layer Effects</h3>
+      <p style="color: #aaa; font-size: 13px;">7 non-destructive effects per layer</p>
+      <ul style="color: #ccc; font-size: 13px;">
+        <li><strong>Core:</strong> Outline, Drop Shadow, Inner Shadow</li>
+        <li><strong>Color:</strong> Hue/Sat Shift, Gradient Map</li>
+        <li><strong>Advanced:</strong> Glow/Bloom, Pattern Overlay</li>
+        <li>FX button per layer in timeline</li>
+        <li>Effects config dialog with live preview</li>
+        <li>Applied during flatten, never modify source pixels</li>
+        <li>Saved in .retro v3 project format</li>
+      </ul>
+    </div>
+    <div style="background: #1a1a2e; border: 2px solid #76ff03; border-radius: 8px; padding: 16px;">
+      <h3 style="color: #76ff03; margin-top: 0;">3. Tilemap Layers</h3>
+      <p style="color: #aaa; font-size: 13px;">Tileset management + tile grid editing</p>
+      <ul style="color: #ccc; font-size: 13px;">
+        <li>New layer type: TilemapLayer</li>
+        <li>Tileset: collection of same-size tile images</li>
+        <li>Two modes: Draw Pixels / Draw Tiles</li>
+        <li>Pixel sub-modes: Auto (default) + Manual</li>
+        <li>Live tile updates (Pyxel Edit style)</li>
+        <li>Tile transforms: flip X/Y</li>
+        <li>Custom tile size with preset dropdown</li>
+        <li>Rectangular tiles only (no iso/hex)</li>
+        <li>Tiles panel in right sidebar</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>New & Modified Files</h3>
+  <div style="background: #0d1117; border-radius: 8px; padding: 20px;">
+    <pre style="color: #ccc; font-family: Consolas, monospace; font-size: 13px; line-height: 1.8; margin: 0;">
+<span style="color: #76ff03;">NEW FILES</span>
+  src/effects.py          — Effect classes + apply pipeline (Outline, Shadow, Glow, etc.)
+  src/tilemap.py          — TilemapLayer, Tileset, tile grid model
+  src/rotsprite.py        — RotSprite algorithm (Scale2x + rotate + downscale)
+  src/ui/effects_dialog.py — FX config dialog with live preview
+  src/ui/tiles_panel.py   — Tile picker panel for right sidebar
+  tests/test_effects.py   — Layer effects tests
+  tests/test_tilemap.py   — Tilemap layer tests
+  tests/test_rotsprite.py — RotSprite algorithm tests
+
+<span style="color: #00d4ff;">MODIFIED FILES</span>
+  src/layer.py            — Add effects list to Layer, TilemapLayer subclass
+  src/canvas.py           — Rotation handles overlay, tile grid overlay
+  src/app.py              — Rotation tool mode, tilemap mode toggle, FX button wiring
+  src/tools.py            — Tile placement tools (pencil/eraser/fill in tile mode)
+  src/ui/timeline.py      — FX button per layer row, tilemap layer icon
+  src/ui/right_panel.py   — Mount tiles panel
+  src/image_processing.py — RotSprite integration
+  src/animation.py        — Frame.flatten() calls effect pipeline
+  src/project.py          — v3 format: effects + tilemap serialization
+    </pre>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Rendering Pipeline (Updated)</h3>
+  <div style="background: #0d1117; border-radius: 8px; padding: 20px;">
+    <pre style="color: #ccc; font-family: Consolas, monospace; font-size: 13px; line-height: 1.6; margin: 0;">
+<span style="color: #888;">// flatten_layers() — updated flow</span>
+for each layer (bottom → top):
+  <span style="color: #76ff03;">if TilemapLayer:</span>
+    <span style="color: #76ff03;">  render tile grid → pixel buffer (resolve tile refs → blit tiles)</span>
+  else:
+    pixel buffer = layer.pixels
+
+  <span style="color: #e040fb;">if layer.effects:</span>
+    <span style="color: #e040fb;">  apply effects in order (color → pattern → glow → outline → shadow)</span>
+
+  composite onto frame (blend mode + opacity)
+
+<span style="color: #00d4ff;">// Rotation (separate from flatten — interactive tool)</span>
+<span style="color: #00d4ff;">on canvas: show rotation handles when selection/layer active</span>
+<span style="color: #00d4ff;">  drag handle → compute RotSprite preview → overlay on canvas</span>
+<span style="color: #00d4ff;">  Enter → bake rotated pixels into layer</span>
+<span style="color: #00d4ff;">  Escape → cancel</span>
+    </pre>
+  </div>
+</div>
