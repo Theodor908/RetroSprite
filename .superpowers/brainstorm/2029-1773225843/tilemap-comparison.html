@@ -1,0 +1,107 @@
+<h2>Tilemap Layers — Competitor Analysis</h2>
+<p class="subtitle">How Aseprite, Pixelorama, and Pyxel Edit handle tilemaps</p>
+
+<div class="section">
+  <h3>Aseprite Model</h3>
+  <div style="background: #1a1a2e; border: 1px solid #444; border-radius: 8px; padding: 16px;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+      <div>
+        <p class="label">Creating</p>
+        <p>Layer > New > New Tilemap Layer (Space+N)</p>
+        <p>Each tilemap layer owns a tileset</p>
+        <p>Tileset = collection of tile images (like a color palette)</p>
+        <p>Index 0 = empty/transparent tile</p>
+      </div>
+      <div>
+        <p class="label">Two Modes (Space+Tab to toggle)</p>
+        <p><strong>Draw Pixels:</strong> Edit tile content directly</p>
+        <ul style="color: #ccc; font-size: 13px;">
+          <li><em>Manual</em> — edit without reordering tileset</li>
+          <li><em>Auto</em> — auto-create/reuse/remove tiles</li>
+          <li><em>Stack</em> — always create new tile variants</li>
+        </ul>
+        <p><strong>Draw Tiles:</strong> Place/remove tile references on grid</p>
+      </div>
+    </div>
+    <div class="pros-cons" style="margin-top: 12px;">
+      <div class="pros"><h4>Strengths</h4><ul>
+        <li>Palette metaphor is intuitive</li>
+        <li>Auto mode = feels like normal drawing</li>
+        <li>Tile transforms (flip X/Y/diagonal)</li>
+        <li>32-bit tile index with transform flags</li>
+      </ul></div>
+      <div class="cons"><h4>Weaknesses</h4><ul>
+        <li>Confusing 3 sub-modes for pixel editing</li>
+        <li>Poor documentation (community complaints)</li>
+        <li>No auto-tiling / terrain rules</li>
+      </ul></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Pixelorama Model</h3>
+  <div style="background: #1a1a2e; border: 1px solid #444; border-radius: 8px; padding: 16px;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+      <div>
+        <p class="label">Creating</p>
+        <p>Timeline menu > Tilemap Layer</p>
+        <p>Config dialog: choose tileset + tile size + shape</p>
+        <p>Tilesets stored in .pxo project, managed via Project Properties</p>
+        <p>Multiple tilemap layers can share a tileset</p>
+      </div>
+      <div>
+        <p class="label">Same Two Modes (Shift+` to toggle)</p>
+        <p><strong>Draw Pixels:</strong> Same 3 sub-modes as Aseprite (Manual/Auto/Stack)</p>
+        <p><strong>Draw Tiles:</strong> Place from Tiles panel</p>
+        <ul style="color: #ccc; font-size: 13px;">
+          <li>Multi-tile selection with randomization</li>
+          <li>Per-tile probability weights</li>
+          <li>Rotation/flip via keyboard shortcuts</li>
+        </ul>
+      </div>
+    </div>
+    <div class="pros-cons" style="margin-top: 12px;">
+      <div class="pros"><h4>Strengths</h4><ul>
+        <li>Supports rect, isometric, and hex tiles</li>
+        <li>Multi-tile random placement</li>
+        <li>Place-only mode for level design</li>
+        <li>Shared tilesets across layers</li>
+      </ul></div>
+      <div class="cons"><h4>Weaknesses</h4><ul>
+        <li>Tile size locked after creation</li>
+        <li>Swapping tileset risks data loss</li>
+        <li>Complex UI for beginners</li>
+      </ul></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Pyxel Edit Model</h3>
+  <div style="background: #1a1a2e; border: 1px solid #444; border-radius: 8px; padding: 16px;">
+    <p class="label">Key Differentiator: Live Tile Updates</p>
+    <p>When you edit a tile's pixels, <strong>all instances update in real-time</strong> across the tilemap. This is the killer UX feature — you see your changes propagate instantly.</p>
+    <p>Also supports: auto-import existing tileset images, identify unique tiles automatically, XML/JSON tilemap export.</p>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Recommended Approach for RetroSprite</h3>
+  <p class="subtitle">Cherry-pick the best from each</p>
+  <div style="background: #0d1117; border: 2px solid #00d4ff; border-radius: 8px; padding: 20px;">
+    <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; color: #ccc; font-size: 14px;">
+      <span style="color: #00d4ff; font-weight: bold;">From Aseprite:</span>
+      <span>Palette metaphor, two-mode toggle (pixel/tile), Auto sub-mode as default</span>
+
+      <span style="color: #00d4ff; font-weight: bold;">From Pixelorama:</span>
+      <span>Tileset creation dialog with tile size config, shared tilesets, tile panel UI</span>
+
+      <span style="color: #00d4ff; font-weight: bold;">From Pyxel Edit:</span>
+      <span>Live tile updates (edit one instance → all update), tileset auto-import</span>
+
+      <span style="color: #00d4ff; font-weight: bold;">Simplify:</span>
+      <span>Start with rectangular tiles only (no iso/hex). Only 2 sub-modes: Auto + Manual (skip Stack). Tile flip X/Y transforms.</span>
+    </div>
+  </div>
+</div>

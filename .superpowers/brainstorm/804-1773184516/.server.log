@@ -1,0 +1,7 @@
+{"type":"server-started","port":63580,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:63580","screen_dir":"C:/Users/vasil/Desktop/MSProject/.superpowers/brainstorm/804-1773184516"}
+{"type":"screen-added","file":"C:\\Users\\vasil\\Desktop\\MSProject\\.superpowers\\brainstorm\\804-1773184516\\scope-batches.html"}
+{"source":"user-event","type":"click","text":"A\n    \n      5 Focused Batches (Recommended)\n      Batch 1 — Selection & Brushes: Lasso/polygon select, selection ops (add/subtract/intersect), custom brushes\n      Batch 2 — Layer Enhancements: Blend modes (multiply, screen, overlay...), layer groups/folders\n      Batch 3 — Drawing Modes: Tiled/seamless mode, ink modes (alpha lock, behind), color ramp generation\n      Batch 4 — Advanced Tools: RotSprite rotation, non-destructive layer effects (outline, shadow), tilemap layers\n      Batch 5 — Infrastructure: Scripting/plugin API, CLI/batch export","choice":"batch-plan","id":null,"timestamp":1773184941750}
+{"type":"screen-added","file":"C:\\Users\\vasil\\Desktop\\MSProject\\.superpowers\\brainstorm\\804-1773184516\\batch1-design.html"}
+{"type":"screen-added","file":"C:\\Users\\vasil\\Desktop\\MSProject\\.superpowers\\brainstorm\\804-1773184516\\waiting.html"}
+{"type":"screen-added","file":"C:\\Users\\vasil\\Desktop\\MSProject\\.superpowers\\brainstorm\\804-1773184516\\batch2-approach.html"}
+{"type":"screen-added","file":"C:\\Users\\vasil\\Desktop\\MSProject\\.superpowers\\brainstorm\\804-1773184516\\waiting-2.html"}

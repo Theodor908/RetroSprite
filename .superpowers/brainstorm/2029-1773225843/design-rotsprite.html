@@ -1,0 +1,129 @@
+<h2>Feature 1: RotSprite Rotation — Detailed Design</h2>
+<p class="subtitle">Pixel-art-aware rotation with on-canvas handles</p>
+
+<div class="section">
+  <h3>Algorithm: RotSprite</h3>
+  <div style="background: #0d1117; border-radius: 8px; padding: 20px;">
+    <pre style="color: #ccc; font-family: Consolas, monospace; font-size: 13px; line-height: 1.6; margin: 0;">
+<span style="color: #00d4ff;">INPUT:</span>  pixel_data (H×W×4 uint8 RGBA), angle (float degrees), pivot (x, y)
+
+<span style="color: #00d4ff;">STEP 1 — Scale2x Upscale (×8)</span>
+  Apply modified Scale2x algorithm 3 times (2³ = 8× magnification)
+
+  Scale2x for each pixel E with neighbors:
+      A B C
+      D E F        →  produces 2×2 block:  [E0, E1]
+      G H I                                [E2, E3]
+
+  Rules:
+    E0 = (D==B && D!=H && B!=F) ? D : E
+    E1 = (B==F && B!=D && F!=H) ? F : E
+    E2 = (D==H && D!=B && H!=F) ? D : E
+    E3 = (H==F && H!=D && F!=B) ? F : E
+
+  <span style="color: #e040fb;">RotSprite modification:</span> use "similar" instead of "=="
+  similar(a, b) = color_distance(a, b) < threshold
+  This preserves anti-aliased edges and gradients
+
+<span style="color: #00d4ff;">STEP 2 — Rotate at 8× resolution</span>
+  Standard nearest-neighbor rotation around pivot × 8
+  At 8× resolution, nearest-neighbor produces clean results
+  because Scale2x already created smooth sub-pixel edges
+
+<span style="color: #00d4ff;">STEP 3 — Downscale back to 1×</span>
+  Area-average downsample 8×8 blocks → 1 pixel
+  For pixel art: use mode (most common color) instead of average
+  to avoid introducing new colors not in the palette
+
+<span style="color: #00d4ff;">OUTPUT:</span> rotated pixel_data, same dimensions, RGBA
+    </pre>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Fast Rotation (Alternative)</h3>
+  <div style="background: #1a1a2e; border: 1px solid #444; border-radius: 8px; padding: 16px;">
+    <p style="color: #ccc;">Simple nearest-neighbor rotation at native resolution. Faster but produces jagged edges. User can toggle between <strong>RotSprite</strong> and <strong>Fast</strong> in the context bar.</p>
+    <p style="color: #aaa; font-size: 13px;">For 90°/180°/270° rotations, both algorithms produce identical results (simple index transpose). RotSprite only matters for arbitrary angles.</p>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Canvas Interaction</h3>
+  <div style="background: #0d1117; border-radius: 8px; padding: 20px;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+      <div>
+        <p class="label">Activation</p>
+        <ul style="color: #ccc; font-size: 13px;">
+          <li>Select content (selection tool or Ctrl+A for whole layer)</li>
+          <li>Edit menu → Rotate, or keyboard shortcut (Ctrl+T)</li>
+          <li>Rotation handles appear around selection bounds</li>
+        </ul>
+
+        <p class="label" style="margin-top: 16px;">Handle Behavior</p>
+        <ul style="color: #ccc; font-size: 13px;">
+          <li>Corner handles: drag to rotate (cursor changes to ↻)</li>
+          <li>Shift+drag: snap to 15° increments (0, 15, 30, 45...)</li>
+          <li>Pivot point: visible dot at center, draggable</li>
+          <li>Live preview updates as you drag</li>
+        </ul>
+      </div>
+      <div>
+        <p class="label">Context Bar</p>
+        <ul style="color: #ccc; font-size: 13px;">
+          <li>Angle input field (type exact value, e.g. 33.5°)</li>
+          <li>Algorithm dropdown: RotSprite | Fast</li>
+          <li>Pivot X/Y coordinate fields</li>
+        </ul>
+
+        <p class="label" style="margin-top: 16px;">Confirm / Cancel</p>
+        <ul style="color: #ccc; font-size: 13px;">
+          <li><strong>Enter</strong> → bake rotation into layer pixels (destructive)</li>
+          <li><strong>Escape</strong> → cancel, restore original</li>
+          <li>Undo (Ctrl+Z) works after baking</li>
+          <li>Undo state saved <em>before</em> entering rotation mode</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Implementation: src/rotsprite.py</h3>
+  <div style="background: #0d1117; border-radius: 8px; padding: 20px;">
+    <pre style="color: #ccc; font-family: Consolas, monospace; font-size: 13px; line-height: 1.6; margin: 0;">
+<span style="color: #76ff03;">def scale2x(pixels: np.ndarray, threshold: int = 48) -> np.ndarray:</span>
+    """Modified Scale2x with similarity threshold for RotSprite."""
+    # Input: (H, W, 4) uint8
+    # Output: (H*2, W*2, 4) uint8
+    # Vectorized with NumPy: pad edges, compare neighbors, assign 2x2 blocks
+
+<span style="color: #76ff03;">def rotsprite_rotate(pixels: np.ndarray, angle: float,
+                     pivot: tuple[int,int] = None) -> np.ndarray:</span>
+    """RotSprite rotation: 3× Scale2x (8×) → rotate → downsample."""
+    # 1. upscaled = scale2x(scale2x(scale2x(pixels)))
+    # 2. rotated = nearest_neighbor_rotate(upscaled, angle, pivot*8)
+    # 3. result = mode_downsample(rotated, factor=8)
+    # return result
+
+<span style="color: #76ff03;">def fast_rotate(pixels: np.ndarray, angle: float,
+                pivot: tuple[int,int] = None) -> np.ndarray:</span>
+    """Simple nearest-neighbor rotation via PIL."""
+    # Wrap existing image_processing.rotate() with pivot support
+
+<span style="color: #76ff03;">def color_distance(a: np.ndarray, b: np.ndarray) -> np.ndarray:</span>
+    """Manhattan distance in RGBA space for similarity check."""
+    </pre>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Performance Considerations</h3>
+  <div style="background: #1a1a2e; border: 1px solid #ffab00; border-radius: 8px; padding: 16px;">
+    <p style="color: #ccc; font-size: 13px;">
+      <strong>8× upscale on a 64×64 sprite = 512×512 intermediate.</strong> This is fine.<br>
+      <strong>8× upscale on a 256×256 sprite = 2048×2048 intermediate.</strong> ~16MB. Still manageable but slower.<br><br>
+      <strong>Mitigation:</strong> Only rotate the selection bounding box, not the full canvas. For large selections, show "Fast" preview during drag, compute RotSprite on mouse release. Cache the RotSprite result until angle changes.
+    </p>
+  </div>
+</div>

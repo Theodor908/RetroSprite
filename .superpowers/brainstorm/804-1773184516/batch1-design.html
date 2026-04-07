@@ -1,0 +1,93 @@
+<h2>Batch 1 Design: Selection & Brushes</h2>
+<p class="subtitle">Three features — here's the full architecture for each</p>
+
+<div class="section">
+  <h3>1. Freehand Lasso Tool</h3>
+  <div class="mockup">
+    <div class="mockup-header">How it works</div>
+    <div class="mockup-body" style="font-size:14px; line-height:1.7;">
+      <p><strong>New class:</strong> <code>LassoTool</code> in <code>src/tools.py</code></p>
+      <p><strong>Interaction:</strong></p>
+      <ul>
+        <li>Click + drag to draw freeform boundary (tracked as list of (x,y) points)</li>
+        <li>On release → auto-close the loop (connect last point to first)</li>
+        <li>Fill interior using scanline algorithm → produces <code>set((x,y))</code></li>
+        <li>Result stored in <code>self._wand_selection</code> (reuses existing pixel-set selection)</li>
+      </ul>
+      <p><strong>Visual feedback:</strong></p>
+      <ul>
+        <li>While dragging: draw the path as overlay lines on canvas</li>
+        <li>After release: render boundary using existing <code>draw_wand_selection()</code></li>
+      </ul>
+      <p><strong>Files changed:</strong> <code>tools.py</code>, <code>app.py</code> (mouse handlers), <code>canvas.py</code> (drag preview), <code>toolbar.py</code> (add icon), <code>options_bar.py</code></p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>2. Selection Operations (Add / Subtract / Intersect)</h3>
+  <div class="mockup">
+    <div class="mockup-header">Unified selection model</div>
+    <div class="mockup-body" style="font-size:14px; line-height:1.7;">
+      <p><strong>Key change:</strong> Unify <code>self._selection</code> (rect tuple) and <code>self._wand_selection</code> (pixel set) into a single <code>self._selection_pixels: set[tuple[int,int]]</code></p>
+      <p>Rect select, wand, and lasso all produce pixel sets. This makes operations trivial:</p>
+      <ul>
+        <li><strong>Shift (Add):</strong> <code>existing | new_pixels</code></li>
+        <li><strong>Ctrl (Subtract):</strong> <code>existing - new_pixels</code></li>
+        <li><strong>Shift+Ctrl (Intersect):</strong> <code>existing & new_pixels</code></li>
+        <li><strong>No modifier:</strong> <code>new_pixels</code> (replace)</li>
+      </ul>
+      <p><strong>Migration:</strong> Convert rect select from storing <code>(x0,y0,x1,y1)</code> to producing a pixel set. Update <code>_copy_selection</code>, <code>_fill_selection</code>, <code>_delete_selection</code> to work with pixel sets only.</p>
+      <p><strong>Visual:</strong> All selections rendered via <code>draw_wand_selection()</code> (boundary outline). Remove the separate <code>draw_selection()</code> rect renderer.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>3. Custom Brushes (Capture from Selection)</h3>
+  <div class="mockup">
+    <div class="mockup-header">Capture & use workflow</div>
+    <div class="mockup-body" style="font-size:14px; line-height:1.7;">
+      <p><strong>Capture:</strong></p>
+      <ul>
+        <li>Menu item: Edit → Capture Brush (shortcut: <code>B</code> or <code>Ctrl+B</code>)</li>
+        <li>Reads pixels within <code>self._selection_pixels</code> bounding box</li>
+        <li>Stores as <code>self._custom_brush: PixelGrid</code> + <code>self._brush_mask: set</code> (relative offsets from center)</li>
+      </ul>
+      <p><strong>Drawing:</strong></p>
+      <ul>
+        <li>When custom brush is active, PenTool/EraserTool iterate over <code>_brush_mask</code> offsets instead of the square size×size footprint</li>
+        <li>Shape-only mode: uses current foreground color + brush alpha</li>
+      </ul>
+      <p><strong>Reset:</strong> Switching brush size or pressing a "Reset Brush" button clears custom brush, returns to square</p>
+      <p><strong>Files changed:</strong> <code>app.py</code> (capture logic, draw routing), <code>tools.py</code> (accept brush mask param), menu entry</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Architecture Summary</h3>
+  <div class="mockup">
+    <div class="mockup-header">Data flow</div>
+    <div class="mockup-body" style="font-size:14px; line-height:1.7; font-family: monospace; white-space: pre; background: #1a1a2e; color: #7fdbca;">
+Selection Tools (Rect, Wand, Lasso)
+        │
+        ▼
+  set[tuple[int,int]]  ◄── unified pixel set
+        │
+   ┌────┼────────────┐
+   ▼    ▼            ▼
+ Copy  Fill    Capture Brush
+ Paste Delete       │
+                    ▼
+            PixelGrid + mask
+                    │
+                    ▼
+          Pen / Eraser apply
+          (iterate mask offsets)</div>
+  </div>
+</div>
+
+<div style="margin-top: 24px; padding: 16px; border: 1px solid #444; border-radius: 8px; background: #1a1a2e;">
+  <p style="color: #e0e0e0; margin: 0;">Does this design look right? Let me know in the terminal if you'd like changes to any part, or if we're good to proceed.</p>
+</div>

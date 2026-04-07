@@ -1,0 +1,252 @@
+<h2>Feature 2: Non-Destructive Layer Effects — Detailed Design</h2>
+<p class="subtitle">7 effects, FX button, config dialog, render pipeline</p>
+
+<div class="section">
+  <h3>Data Model</h3>
+  <div style="background: #0d1117; border-radius: 8px; padding: 20px;">
+    <pre style="color: #ccc; font-family: Consolas, monospace; font-size: 13px; line-height: 1.6; margin: 0;">
+<span style="color: #76ff03;">class LayerEffect:</span>
+    type: str          <span style="color: #888;"># "outline", "drop_shadow", "inner_shadow", "hue_sat",</span>
+                       <span style="color: #888;"># "gradient_map", "glow", "pattern_overlay"</span>
+    enabled: bool      <span style="color: #888;"># toggle on/off without removing</span>
+    params: dict       <span style="color: #888;"># effect-specific parameters (see below)</span>
+
+<span style="color: #76ff03;">class Layer (updated):</span>
+    ...existing fields...
+    effects: list[LayerEffect] = []  <span style="color: #888;"># ordered list, applied top to bottom</span>
+
+<span style="color: #888;">## Effect Params ##</span>
+
+<span style="color: #e040fb;">Outline:</span>
+  color: (R,G,B,A)    <span style="color: #888;"># default (0,0,0,255) black</span>
+  thickness: int       <span style="color: #888;"># 1-4 pixels</span>
+  mode: str            <span style="color: #888;"># "outer" | "inner" | "both"</span>
+  connectivity: int    <span style="color: #888;"># 4 (cardinal only) | 8 (diagonal too)</span>
+
+<span style="color: #e040fb;">Drop Shadow:</span>
+  color: (R,G,B,A)     <span style="color: #888;"># default (0,0,0,180)</span>
+  offset_x: int        <span style="color: #888;"># -16 to +16, default 2</span>
+  offset_y: int        <span style="color: #888;"># -16 to +16, default 2</span>
+  blur: int            <span style="color: #888;"># 0-3, default 0 (hard pixel shadow)</span>
+  opacity: float       <span style="color: #888;"># 0.0-1.0, default 0.7</span>
+
+<span style="color: #e040fb;">Inner Shadow:</span>
+  color: (R,G,B,A)     <span style="color: #888;"># default (0,0,0,160)</span>
+  offset_x: int        <span style="color: #888;"># -16 to +16, default 1</span>
+  offset_y: int        <span style="color: #888;"># -16 to +16, default 1</span>
+  blur: int            <span style="color: #888;"># 0-3, default 0</span>
+  opacity: float       <span style="color: #888;"># 0.0-1.0, default 0.5</span>
+
+<span style="color: #e040fb;">Hue/Saturation Shift:</span>
+  hue: int             <span style="color: #888;"># -180 to +180 degrees, default 0</span>
+  saturation: float    <span style="color: #888;"># 0.0-2.0 multiplier, default 1.0</span>
+  lightness: int       <span style="color: #888;"># -100 to +100, default 0</span>
+
+<span style="color: #e040fb;">Gradient Map:</span>
+  stops: list[(float, (R,G,B,A))]  <span style="color: #888;"># position 0.0-1.0 → color</span>
+  opacity: float                    <span style="color: #888;"># blend strength 0.0-1.0</span>
+
+<span style="color: #e040fb;">Glow/Bloom:</span>
+  threshold: int       <span style="color: #888;"># 0-255, brightness cutoff, default 200</span>
+  radius: int          <span style="color: #888;"># 1-8 blur radius, default 3</span>
+  intensity: float     <span style="color: #888;"># 0.0-2.0 multiplier, default 1.0</span>
+  tint: (R,G,B,A)      <span style="color: #888;"># glow color tint, default (255,255,255,255)</span>
+
+<span style="color: #e040fb;">Pattern Overlay:</span>
+  pattern: str         <span style="color: #888;"># "scanlines"|"crosshatch"|"dots"|"diagonal"|"noise"|"checkerboard"</span>
+  blend_mode: str      <span style="color: #888;"># any of the 9 existing blend modes</span>
+  opacity: float       <span style="color: #888;"># 0.0-1.0, default 0.3</span>
+  scale: int           <span style="color: #888;"># 1-4x, default 1</span>
+  offset_x: int        <span style="color: #888;"># pattern offset</span>
+  offset_y: int
+    </pre>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Effect Algorithms: src/effects.py</h3>
+  <div style="background: #0d1117; border-radius: 8px; padding: 20px;">
+    <pre style="color: #ccc; font-family: Consolas, monospace; font-size: 13px; line-height: 1.6; margin: 0;">
+<span style="color: #76ff03;">def apply_outline(pixels, color, thickness, mode, connectivity):</span>
+    alpha = pixels[:,:,3]
+    for each thickness step:
+      if mode == "outer" or "both":
+        <span style="color: #888;"># find transparent pixels adjacent to opaque (dilate - original)</span>
+        dilated = binary_dilation(alpha > 0, connectivity_struct)
+        outline_mask = dilated & (alpha == 0)
+        result[outline_mask] = color
+      if mode == "inner" or "both":
+        <span style="color: #888;"># find opaque pixels adjacent to transparent (original - erode)</span>
+        eroded = binary_erosion(alpha > 0, connectivity_struct)
+        inner_mask = (alpha > 0) & ~eroded
+        result[inner_mask] = blend(result[inner_mask], color)
+
+<span style="color: #76ff03;">def apply_drop_shadow(pixels, color, ox, oy, blur, opacity):</span>
+    <span style="color: #888;"># 1. Extract alpha mask</span>
+    shadow_mask = pixels[:,:,3] > 0
+    <span style="color: #888;"># 2. Create shadow layer, fill with color at opacity</span>
+    shadow = np.zeros_like(pixels)
+    shadow[shadow_mask] = [*color[:3], int(255 * opacity)]
+    <span style="color: #888;"># 3. Offset by (ox, oy) via np.roll + zero-fill edges</span>
+    shadow = shift_array(shadow, ox, oy)
+    <span style="color: #888;"># 4. Optional gaussian blur (scipy.ndimage or manual 3x3/5x5 kernel)</span>
+    if blur > 0: shadow = gaussian_blur(shadow, sigma=blur)
+    <span style="color: #888;"># 5. Composite shadow BEHIND original pixels</span>
+    return alpha_composite(shadow, pixels)  <span style="color: #888;"># shadow first, then pixels on top</span>
+
+<span style="color: #76ff03;">def apply_inner_shadow(pixels, color, ox, oy, blur, opacity):</span>
+    <span style="color: #888;"># 1. Invert alpha mask</span>
+    inv_alpha = 255 - pixels[:,:,3]
+    <span style="color: #888;"># 2. Create shadow from inverted mask, offset, optionally blur</span>
+    <span style="color: #888;"># 3. Clip to original alpha (shadow only visible inside opaque areas)</span>
+    <span style="color: #888;"># 4. Blend onto pixels with multiply or normal mode</span>
+
+<span style="color: #76ff03;">def apply_hue_sat(pixels, hue, saturation, lightness):</span>
+    <span style="color: #888;"># Vectorized RGB→HSV, shift H, scale S, offset V, HSV→RGB</span>
+    <span style="color: #888;"># Preserve alpha channel unchanged</span>
+    <span style="color: #888;"># Use NumPy vectorized ops (no per-pixel Python loop)</span>
+
+<span style="color: #76ff03;">def apply_gradient_map(pixels, stops, opacity):</span>
+    <span style="color: #888;"># 1. Compute luminance: 0.299*R + 0.587*G + 0.114*B → float [0,1]</span>
+    <span style="color: #888;"># 2. For each pixel, find two nearest stops, interpolate color</span>
+    <span style="color: #888;"># 3. Blend mapped colors with original at given opacity</span>
+
+<span style="color: #76ff03;">def apply_glow(pixels, threshold, radius, intensity, tint):</span>
+    <span style="color: #888;"># 1. bright_mask = luminance(pixels) > threshold</span>
+    <span style="color: #888;"># 2. bright_layer = pixels * bright_mask, tinted</span>
+    <span style="color: #888;"># 3. blurred = gaussian_blur(bright_layer, sigma=radius)</span>
+    <span style="color: #888;"># 4. Screen-blend blurred onto pixels at intensity</span>
+
+<span style="color: #76ff03;">def apply_pattern_overlay(pixels, pattern, blend_mode, opacity, scale, ox, oy):</span>
+    <span style="color: #888;"># 1. Generate/load pattern tile (small 4×4 to 8×8 array)</span>
+    <span style="color: #888;"># 2. Tile across layer bounds, offset by (ox, oy), scale up</span>
+    <span style="color: #888;"># 3. Clip to layer alpha (pattern only on opaque pixels)</span>
+    <span style="color: #888;"># 4. Blend with existing blend mode function at opacity</span>
+
+<span style="color: #76ff03;">def apply_effects(pixels: np.ndarray, effects: list[LayerEffect]) -> np.ndarray:</span>
+    """Master function: applies all enabled effects in order."""
+    result = pixels.copy()
+    for fx in effects:
+        if not fx.enabled: continue
+        result = EFFECT_FUNCS[fx.type](result, **fx.params)
+    return result
+    </pre>
+  </div>
+</div>
+
+<div class="section">
+  <h3>UI: FX Button + Config Dialog</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <div style="background: #1a1a2e; border: 1px solid #444; border-radius: 8px; padding: 16px;">
+      <p class="label">Timeline Layer Row</p>
+      <div style="background: #0d0d1a; border-radius: 4px; padding: 8px; font-family: Consolas; font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 8px;">
+        <span style="color: #888;">👁</span>
+        <span style="color: #888;">🔒</span>
+        <span>Layer 1</span>
+        <span style="flex:1;"></span>
+        <span style="background: #e040fb33; color: #e040fb; padding: 2px 6px; border-radius: 3px; font-size: 10px; cursor: pointer; border: 1px solid #e040fb;">FX</span>
+        <span style="background: #333; padding: 2px 4px; border-radius: 3px; font-size: 10px;">norm▾</span>
+      </div>
+      <p style="color: #aaa; font-size: 12px; margin-top: 8px;">
+        FX button: magenta when effects active, dim when empty.<br>
+        Click → opens effects config dialog.
+      </p>
+    </div>
+    <div style="background: #1a1a2e; border: 1px solid #444; border-radius: 8px; padding: 16px;">
+      <p class="label">Effects Config Dialog</p>
+      <div style="background: #0d0d1a; border-radius: 4px; padding: 12px; font-family: Consolas; font-size: 11px; color: #ccc;">
+        <div style="border-bottom: 1px solid #333; padding-bottom: 6px; margin-bottom: 8px; color: #e040fb;">
+          Layer Effects — Layer 1
+        </div>
+        <div style="display: flex; gap: 12px;">
+          <div style="width: 140px; border-right: 1px solid #333; padding-right: 8px;">
+            <div style="color: #888; font-size: 10px; margin-bottom: 4px;">ACTIVE EFFECTS</div>
+            <div style="padding: 3px; background: #e040fb22; border-radius: 3px; margin-bottom: 2px;">☑ Outline</div>
+            <div style="padding: 3px; margin-bottom: 2px;">☑ Drop Shadow</div>
+            <div style="padding: 3px; margin-bottom: 2px; color: #666;">☐ Glow</div>
+            <div style="margin-top: 8px; display: flex; gap: 4px;">
+              <span style="background: #333; padding: 2px 8px; border-radius: 3px; cursor: pointer;">+ Add</span>
+              <span style="background: #333; padding: 2px 8px; border-radius: 3px; cursor: pointer;">▲</span>
+              <span style="background: #333; padding: 2px 8px; border-radius: 3px; cursor: pointer;">▼</span>
+              <span style="background: #333; padding: 2px 8px; border-radius: 3px; cursor: pointer;">✕</span>
+            </div>
+          </div>
+          <div style="flex: 1;">
+            <div style="color: #00d4ff; font-size: 10px; margin-bottom: 6px;">OUTLINE SETTINGS</div>
+            <div style="margin-bottom: 4px;">Color: <span style="background: #000; padding: 1px 12px; border: 1px solid #555;"></span></div>
+            <div style="margin-bottom: 4px;">Thickness: <span style="color: #76ff03;">1</span> px</div>
+            <div style="margin-bottom: 4px;">Mode: <span style="color: #aaa;">outer ▾</span></div>
+            <div style="margin-bottom: 4px;">Connectivity: <span style="color: #aaa;">8 ▾</span></div>
+          </div>
+        </div>
+        <div style="border-top: 1px solid #333; padding-top: 8px; margin-top: 8px; display: flex; justify-content: flex-end; gap: 8px;">
+          <span style="background: #333; padding: 4px 16px; border-radius: 3px; cursor: pointer;">Cancel</span>
+          <span style="background: #e040fb44; padding: 4px 16px; border-radius: 3px; cursor: pointer; border: 1px solid #e040fb;">Apply</span>
+        </div>
+      </div>
+      <p style="color: #aaa; font-size: 12px; margin-top: 8px;">
+        Left: effect list with checkboxes + reorder/add/remove.<br>
+        Right: params for selected effect.<br>
+        Live preview on canvas as you adjust.
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Built-in Patterns (for Pattern Overlay)</h3>
+  <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;">
+    <div style="text-align: center;">
+      <div style="width: 48px; height: 48px; margin: 0 auto 4px; background: repeating-linear-gradient(0deg, #fff 0px, #fff 2px, #000 2px, #000 4px); border-radius: 4px;"></div>
+      <span style="color: #aaa; font-size: 11px;">Scanlines</span>
+    </div>
+    <div style="text-align: center;">
+      <div style="width: 48px; height: 48px; margin: 0 auto 4px; background: repeating-linear-gradient(0deg, #fff 0px, #fff 2px, #000 2px, #000 4px), repeating-linear-gradient(90deg, #fff3 0px, #fff3 2px, #0003 2px, #0003 4px); border-radius: 4px;"></div>
+      <span style="color: #aaa; font-size: 11px;">Crosshatch</span>
+    </div>
+    <div style="text-align: center;">
+      <div style="width: 48px; height: 48px; margin: 0 auto 4px; background: radial-gradient(circle, #fff 1px, #000 1px); background-size: 6px 6px; border-radius: 4px;"></div>
+      <span style="color: #aaa; font-size: 11px;">Dots</span>
+    </div>
+    <div style="text-align: center;">
+      <div style="width: 48px; height: 48px; margin: 0 auto 4px; background: repeating-linear-gradient(45deg, #fff 0px, #fff 2px, #000 2px, #000 5px); border-radius: 4px;"></div>
+      <span style="color: #aaa; font-size: 11px;">Diagonal</span>
+    </div>
+    <div style="text-align: center;">
+      <div style="width: 48px; height: 48px; margin: 0 auto 4px; border-radius: 4px; overflow: hidden; position: relative;">
+        <div style="position: absolute; inset: 0; background: #444; filter: url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22><filter id=%22n%22><feTurbulence baseFrequency=%220.8%22/></filter></svg>#n');"></div>
+      </div>
+      <span style="color: #aaa; font-size: 11px;">Noise</span>
+    </div>
+    <div style="text-align: center;">
+      <div style="width: 48px; height: 48px; margin: 0 auto 4px; background: repeating-conic-gradient(#fff 0% 25%, #000 0% 50%) 0 0 / 8px 8px; border-radius: 4px;"></div>
+      <span style="color: #aaa; font-size: 11px;">Checker</span>
+    </div>
+  </div>
+  <p style="color: #aaa; font-size: 12px; margin-top: 8px;">Each pattern is a small NumPy array (4×4 to 8×8), generated procedurally. Tiled across the layer, clipped to alpha, blended with chosen mode.</p>
+</div>
+
+<div class="section">
+  <h3>Integration Points</h3>
+  <div style="background: #1a1a2e; border: 1px solid #444; border-radius: 8px; padding: 16px;">
+    <div style="display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; color: #ccc; font-size: 13px;">
+      <span style="color: #00d4ff;">flatten_layers()</span>
+      <span>Calls apply_effects(layer.pixels, layer.effects) before compositing each layer</span>
+
+      <span style="color: #00d4ff;">Layer.__init__()</span>
+      <span>New field: self.effects = []</span>
+
+      <span style="color: #00d4ff;">timeline.py</span>
+      <span>FX button in layer row, opens EffectsDialog</span>
+
+      <span style="color: #00d4ff;">project.py</span>
+      <span>Serialize effects as JSON list in layer data. v3 format.</span>
+
+      <span style="color: #00d4ff;">View menu</span>
+      <span>"Display Layer Effects" toggle (default ON). When OFF, flatten skips effects for faster editing.</span>
+
+      <span style="color: #00d4ff;">Export</span>
+      <span>Effects always applied on export regardless of toggle.</span>
+    </div>
+  </div>
+</div>
