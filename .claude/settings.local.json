@@ -28,7 +28,9 @@
       "Bash(cp C:/Users/vasil/Desktop/frame_tags.gif C:/Users/vasil/Desktop/RetroSprite/assets/frame_tags.gif)",
       "Bash(cp C:/Users/vasil/Desktop/transform.gif C:/Users/vasil/Desktop/RetroSprite/assets/transform.gif)",
       "Bash(cp C:/Users/vasil/Desktop/tilemap.gif C:/Users/vasil/Desktop/RetroSprite/assets/tilemap.gif)",
-      "Bash(cp C:/Users/vasil/Desktop/text.gif C:/Users/vasil/Desktop/RetroSprite/assets/text.gif)"
+      "Bash(cp C:/Users/vasil/Desktop/text.gif C:/Users/vasil/Desktop/RetroSprite/assets/text.gif)",
+      "Bash(git stash:*)",
+      "Bash(git status:*)"
     ]
   }
 }
