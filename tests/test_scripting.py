@@ -65,6 +65,16 @@ class TestEventSystem:
         api.emit("test", {})
         assert calls == ["ok"]
 
+    def test_project_switch_event(self):
+        """project_switch event fires with index payload."""
+        app = FakeApp()
+        api = RetroSpriteAPI(timeline=app.timeline, palette=app.palette, app=app)
+        received = []
+        api.on("project_switch", lambda payload: received.append(payload))
+        api.emit("project_switch", {"index": 2})
+        assert len(received) == 1
+        assert received[0]["index"] == 2
+
 
 class TestPluginDiscovery:
     def test_discover_empty_dir(self, tmp_path):
@@ -425,3 +435,49 @@ class TestCLIRun:
         script.write_text("raise ValueError('test error')")
         result = cmd_run(str(script), [])
         assert result == 1
+
+
+class FakeApp:
+    def __init__(self):
+        self.timeline = AnimationTimeline(32, 32)
+        self.palette = Palette("Pico-8")
+
+
+class TestDynamicProperties:
+    def test_api_timeline_follows_app(self):
+        """API.timeline returns whatever the app currently has."""
+        app = FakeApp()
+        api = RetroSpriteAPI(timeline=app.timeline, palette=app.palette, app=app)
+        old_timeline = api.timeline
+        app.timeline = AnimationTimeline(64, 64)
+        assert api.timeline is app.timeline
+        assert api.timeline is not old_timeline
+
+    def test_api_palette_follows_app(self):
+        """API.palette returns whatever the app currently has."""
+        app = FakeApp()
+        api = RetroSpriteAPI(timeline=app.timeline, palette=app.palette, app=app)
+        old_palette = api.palette
+        app.palette = Palette("Pico-8")
+        assert api.palette is app.palette
+        assert api.palette is not old_palette
+
+    def test_api_headless_no_app(self):
+        """Without an app, timeline/palette are stored directly."""
+        tl = AnimationTimeline(16, 16)
+        pal = Palette("Pico-8")
+        api = RetroSpriteAPI(timeline=tl, palette=pal, app=None)
+        assert api.timeline is tl
+        assert api.palette is pal
+
+    def test_api_setter_updates_app(self):
+        """Setting api.timeline/palette also updates the app."""
+        app = FakeApp()
+        api = RetroSpriteAPI(timeline=app.timeline, palette=app.palette, app=app)
+        new_tl = AnimationTimeline(128, 128)
+        api.timeline = new_tl
+        assert app.timeline is new_tl
+
+        new_pal = Palette("Pico-8")
+        api.palette = new_pal
+        assert app.palette is new_pal

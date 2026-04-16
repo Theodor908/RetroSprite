@@ -4,6 +4,23 @@ All notable changes to RetroSprite will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-04-17
+
+### Added
+- Multi-document tabbed interface: open multiple projects simultaneously
+- Per-document undo/redo, palette, timeline, grid, and canvas state
+- Global clipboard for cross-document copy/paste
+- Tab bar with dirty indicators, close buttons, and overflow scrolling
+- Tab context menu: Close, Close Others, Close All, Save, Reveal in Explorer
+- Auto-save across all open documents (not just the active tab)
+- Keyboard shortcuts: Ctrl+N (new tab), Ctrl+W (close tab), Ctrl+Shift+W (close all), Ctrl+Tab / Ctrl+Shift+Tab (cycle tabs), Ctrl+1-9 (jump to tab)
+- Dynamic scripting API: `api.timeline` and `api.palette` now always reflect the active document
+- `project_switch` event for plugins to react to tab changes
+
+### Changed
+- File > New and File > Open now create new tabs instead of replacing the current document
+- Closing the last tab returns to the startup dialog
+
 ## [1.0.0] - 2026-03-26
 
 ### Added

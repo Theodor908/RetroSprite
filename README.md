@@ -62,6 +62,13 @@ RetroSprite provides the tools to create pixel art, sprite sheets, tilemaps, and
 - Grid settings persist per project in `.retro` files
 - Snap transforms, movement, paste, and text placement to the custom grid
 
+**Multi-Document Tabs**
+- Multiple projects open simultaneously in a tabbed interface
+- Per-document undo/redo, palette, timeline, and canvas state
+- Global clipboard for cross-document copy/paste
+- Tab context menu: Close, Close Others, Save, Reveal in Explorer
+- Auto-save across all open documents
+
 **Layers & Animation**
 - Unlimited layers with blend modes
 - Layer groups for organization
@@ -182,8 +189,14 @@ python -m src.cli info project.retro
 | Ctrl+C / Ctrl+V | Copy / Paste selection |
 | Ctrl+X | Cut selection |
 | Ctrl+Shift+E | Export dialog |
+| Ctrl+N | New project (new tab) |
 | Ctrl+S | Save project |
-| Ctrl+O | Open project |
+| Ctrl+O | Open project (new tab) |
+| Ctrl+W | Close active tab |
+| Ctrl+Shift+W | Close all tabs |
+| Ctrl+Tab | Next tab |
+| Ctrl+Shift+Tab | Previous tab |
+| Ctrl+1-9 | Jump to tab by position |
 | Ctrl+R | Load / toggle reference image |
 | Delete | Delete selection contents |
 
