@@ -19,6 +19,13 @@ _DARK = {
     "BUTTON_BG": "#1a1a2e",
     "BUTTON_HOVER": "#252545",
     "BUTTON_ACTIVE": "#0d0d12",
+    "TAB_ACTIVE": "#1a1a2e",
+    "TAB_INACTIVE": "#0d0d12",
+    "TAB_HOVER": "#22223a",
+    "TAB_CLOSE": "#7a7a9a",
+    "TAB_CLOSE_HOVER": "#ff4466",
+    "TAB_DIRTY": "#ff00aa",
+    "TAB_BORDER": "#1e1e3a",
 }
 
 # --- Light mode palette ---
@@ -37,6 +44,13 @@ _LIGHT = {
     "BUTTON_BG": "#d8d8e6",
     "BUTTON_HOVER": "#c8c8dd",
     "BUTTON_ACTIVE": "#f0f0f5",
+    "TAB_ACTIVE": "#1a1a2e",
+    "TAB_INACTIVE": "#0d0d12",
+    "TAB_HOVER": "#22223a",
+    "TAB_CLOSE": "#7a7a9a",
+    "TAB_CLOSE_HOVER": "#ff4466",
+    "TAB_DIRTY": "#ff00aa",
+    "TAB_BORDER": "#1e1e3a",
 }
 
 # Color palette (mutable module-level vars, updated by set_mode)
@@ -54,6 +68,13 @@ WARNING = _DARK["WARNING"]
 BUTTON_BG = _DARK["BUTTON_BG"]
 BUTTON_HOVER = _DARK["BUTTON_HOVER"]
 BUTTON_ACTIVE = _DARK["BUTTON_ACTIVE"]
+TAB_ACTIVE = _DARK["TAB_ACTIVE"]
+TAB_INACTIVE = _DARK["TAB_INACTIVE"]
+TAB_HOVER = _DARK["TAB_HOVER"]
+TAB_CLOSE = _DARK["TAB_CLOSE"]
+TAB_CLOSE_HOVER = _DARK["TAB_CLOSE_HOVER"]
+TAB_DIRTY = _DARK["TAB_DIRTY"]
+TAB_BORDER = _DARK["TAB_BORDER"]
 
 
 def get_mode() -> str:
@@ -67,6 +88,7 @@ def set_mode(mode: str):
     global TEXT_PRIMARY, TEXT_SECONDARY
     global ACCENT_CYAN, ACCENT_MAGENTA, ACCENT_PURPLE, SUCCESS, WARNING
     global BUTTON_BG, BUTTON_HOVER, BUTTON_ACTIVE
+    global TAB_ACTIVE, TAB_INACTIVE, TAB_HOVER, TAB_CLOSE, TAB_CLOSE_HOVER, TAB_DIRTY, TAB_BORDER
     _current_mode = mode
     palette = _DARK if mode == "dark" else _LIGHT
     BG_DEEP = palette["BG_DEEP"]
@@ -83,6 +105,13 @@ def set_mode(mode: str):
     BUTTON_BG = palette["BUTTON_BG"]
     BUTTON_HOVER = palette["BUTTON_HOVER"]
     BUTTON_ACTIVE = palette["BUTTON_ACTIVE"]
+    TAB_ACTIVE = palette["TAB_ACTIVE"]
+    TAB_INACTIVE = palette["TAB_INACTIVE"]
+    TAB_HOVER = palette["TAB_HOVER"]
+    TAB_CLOSE = palette["TAB_CLOSE"]
+    TAB_CLOSE_HOVER = palette["TAB_CLOSE_HOVER"]
+    TAB_DIRTY = palette["TAB_DIRTY"]
+    TAB_BORDER = palette["TAB_BORDER"]
 
 # Neon glow variants (softer/transparent versions for glow effects)
 NEON_GLOW_CYAN = "#00f0ff"      # Same as ACCENT_CYAN, used at reduced opacity in PIL

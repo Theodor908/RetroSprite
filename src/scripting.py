@@ -18,14 +18,38 @@ class RetroSpriteAPI:
 
     def __init__(self, timeline: AnimationTimeline, palette: Palette,
                  app: Any | None = None):
-        self.timeline = timeline
-        self.palette = palette
+        self._timeline = timeline
+        self._palette = palette
         self.app = app
         self._listeners: dict[str, list[Callable]] = {}
         self._plugin_tools: dict[str, Any] = {}
         self._plugin_filters: dict[str, Callable] = {}
         self._plugin_effects: dict[str, dict] = {}
         self._menu_items: list[dict] = []
+
+    @property
+    def timeline(self) -> AnimationTimeline:
+        if self.app is not None:
+            return self.app.timeline
+        return self._timeline
+
+    @timeline.setter
+    def timeline(self, value: AnimationTimeline) -> None:
+        self._timeline = value
+        if self.app is not None:
+            self.app.timeline = value
+
+    @property
+    def palette(self) -> Palette:
+        if self.app is not None:
+            return self.app.palette
+        return self._palette
+
+    @palette.setter
+    def palette(self, value: Palette) -> None:
+        self._palette = value
+        if self.app is not None:
+            self.app.palette = value
 
     # --- Event System ---
 

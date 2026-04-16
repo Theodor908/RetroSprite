@@ -13,6 +13,16 @@ python main.py             # Launch the app
 python -m src.cli --help   # CLI batch mode
 ```
 
+### Tab Navigation Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+W` | Close active tab |
+| `Ctrl+Shift+W` | Close all tabs |
+| `Ctrl+Tab` | Next tab |
+| `Ctrl+Shift+Tab` | Previous tab |
+| `Ctrl+1-9` | Jump to tab by position |
+
 ## Architecture
 
 Entry: `main.py` → `src/app.py:RetroSpriteApp`
@@ -30,6 +40,14 @@ Entry: `main.py` → `src/app.py:RetroSpriteApp`
 See `docs/ARCHITECTURE.md` for full module map and data flow.
 See `docs/CODING_STANDARDS.md` for detailed practices.
 See `docs/CONTRIBUTING.md` for contributor guide.
+
+### Multi-Project Tabs
+
+- `src/project_context.py` — `ProjectContext` dataclass holding per-document state
+- `src/ui/tab_bar.py` — `TabBar` custom widget for document switching
+- State swap: `_save_to_context()` / `_load_from_context()` / `_switch_project()` in `app.py`
+- Global state (tool, clipboard) stays on app; per-document state (timeline, palette, undo) lives in ProjectContext
+- Tab bar always visible, positioned above options bar
 
 ## Key Conventions
 

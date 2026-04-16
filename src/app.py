@@ -19,12 +19,14 @@ from src.animation import AnimationTimeline
 from src.grid import GridSettings
 from src.palette import Palette
 from src.project import save_project, load_project
+from src.project_context import ProjectContext
 from src.keybindings import KeybindingsManager
 from src.scripting import RetroSpriteAPI
 from src.plugins import load_all_plugins
 from src.ui.toolbar import Toolbar
 from src.ui.right_panel import RightPanel
 from src.ui.options_bar import OptionsBar
+from src.ui.tab_bar import TabBar
 from src.tool_settings import ToolSettingsManager
 from src.ui.timeline import TimelinePanel
 from src.ui.dialogs import (
@@ -249,6 +251,46 @@ class RetroSpriteApp(InputHandlerMixin, FileOpsMixin, RotationMixin,
         if self._project_path:
             self.root.title(f"RetroSprite - {self._project_path}")
 
+        # Multi-project state
+        self._projects: list = []
+        self._active_project_index: int = 0
+
+        # Wrap initial document in a ProjectContext
+        initial_ctx = ProjectContext(
+            project_path=self._project_path,
+            name=os.path.basename(self._project_path) if self._project_path else "Untitled",
+            timeline=self.timeline,
+            palette=self.palette,
+            undo_stack=self._undo_stack,
+            redo_stack=self._redo_stack,
+            grid_settings=self._grid_settings,
+            symmetry_mode=self._symmetry_mode,
+            symmetry_axis_x=self._symmetry_axis_x,
+            symmetry_axis_y=self._symmetry_axis_y,
+            reference=self._reference,
+            playback_mode=self._playback_mode,
+            onion_skin=self._onion_skin,
+            onion_range=self._onion_range,
+            pingpong_direction=self._pingpong_direction,
+            export_settings=self._export_settings,
+            tool_settings=self._tool_settings,
+            tiled_mode=self._tiled_mode,
+            dither_pattern=self._dither_pattern,
+            pixel_perfect=self._pixel_perfect,
+            ink_mode=self._ink_mode,
+            fill_mode=self._fill_mode,
+            display_effects=self._display_effects,
+        )
+        if initial_ctx.name == "Untitled":
+            ProjectContext._untitled_counter = 1
+        self._projects.append(initial_ctx)
+        self._active_project_index = 0
+
+        # Add initial tab to the tab bar
+        self.tab_bar.add_tab(initial_ctx.name, activate=True)
+        if self._project_path:
+            self.tab_bar.set_tooltip(0, self._project_path)
+
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def run(self):
@@ -267,6 +309,204 @@ class RetroSpriteApp(InputHandlerMixin, FileOpsMixin, RotationMixin,
             self._app_icon = ImageTk.PhotoImage(icon_img)
             self.root.iconphoto(True, self._app_icon)
 
+    # --- Multi-project management ---
+
+    @property
+    def _active_context(self):
+        """The currently active ProjectContext."""
+        return self._projects[self._active_project_index]
+
+    def _save_to_context(self):
+        """Save current app state into the active ProjectContext."""
+        ctx = self._projects[self._active_project_index]
+        ctx.project_path = self._project_path
+        ctx.dirty = self._dirty
+        ctx.timeline = self.timeline
+        ctx.palette = self.palette
+        ctx.undo_stack = self._undo_stack
+        ctx.redo_stack = self._redo_stack
+        ctx.grid_settings = self._grid_settings
+        ctx.symmetry_mode = self._symmetry_mode
+        ctx.symmetry_axis_x = self._symmetry_axis_x
+        ctx.symmetry_axis_y = self._symmetry_axis_y
+        ctx.reference = self._reference
+        ctx.playing = self._playing
+        ctx.playback_mode = self._playback_mode
+        ctx.onion_skin = self._onion_skin
+        ctx.onion_range = self._onion_range
+        ctx.pingpong_direction = self._pingpong_direction
+        ctx.export_settings = self._export_settings
+        ctx.tool_settings = self._tool_settings
+        ctx.tiled_mode = self._tiled_mode
+        ctx.dither_pattern = self._dither_pattern
+        ctx.pixel_perfect = self._pixel_perfect
+        ctx.ink_mode = self._ink_mode
+        ctx.fill_mode = self._fill_mode
+        ctx.display_effects = self._display_effects
+        # Canvas view state
+        ctx.zoom_level = self.pixel_canvas.pixel_size
+        try:
+            ctx.scroll_x = self.pixel_canvas.xview()[0]
+            ctx.scroll_y = self.pixel_canvas.yview()[0]
+        except Exception:
+            pass
+
+    def _load_from_context(self, index):
+        """Load state from a ProjectContext into app variables."""
+        ctx = self._projects[index]
+        self._project_path = ctx.project_path
+        self._dirty = ctx.dirty
+        self.timeline = ctx.timeline
+        self.palette = ctx.palette
+        self._undo_stack = ctx.undo_stack
+        self._redo_stack = ctx.redo_stack
+        self._grid_settings = ctx.grid_settings
+        self._symmetry_mode = ctx.symmetry_mode
+        self._symmetry_axis_x = ctx.symmetry_axis_x
+        self._symmetry_axis_y = ctx.symmetry_axis_y
+        self._reference = ctx.reference
+        self._playing = ctx.playing
+        self._playback_mode = ctx.playback_mode
+        self._onion_skin = ctx.onion_skin
+        self._onion_range = ctx.onion_range
+        self._pingpong_direction = ctx.pingpong_direction
+        self._export_settings = ctx.export_settings
+        self._tool_settings = ctx.tool_settings
+        self._tiled_mode = ctx.tiled_mode
+        self._dither_pattern = ctx.dither_pattern
+        self._pixel_perfect = ctx.pixel_perfect
+        self._ink_mode = ctx.ink_mode
+        self._fill_mode = ctx.fill_mode
+        self._display_effects = ctx.display_effects
+        # Canvas view state
+        self.pixel_canvas.pixel_size = ctx.zoom_level
+        # Restore scroll position after render
+        self.root.after_idle(lambda: (
+            self.pixel_canvas.xview_moveto(ctx.scroll_x),
+            self.pixel_canvas.yview_moveto(ctx.scroll_y),
+        ))
+
+    def _switch_project(self, index):
+        """Switch the active document to the project at the given index."""
+        if index == self._active_project_index:
+            return
+        if index < 0 or index >= len(self._projects):
+            return
+
+        # 1. Cancel transient modes
+        if self._text_mode:
+            self._exit_text_mode(commit=False)
+        if self._selection_transform is not None:
+            self._cancel_selection_transform()
+        if self._rotation_mode:
+            self._exit_rotation_mode(apply=False)
+        if self._pasting:
+            self._cancel_paste()
+        if self._polygon_points:
+            self._cancel_polygon()
+        self._lasso_points = []
+        self._selection_pixels = None
+        self._line_start = None
+        self._rect_start = None
+        self._roundrect_start = None
+        self._ellipse_start = None
+        self._select_start = None
+        self._move_start = None
+        self._move_snapshot = None
+        self._hand_last = None
+
+        # 2. Stop playback
+        self._stop_animation()
+
+        # 3. Save outgoing state
+        self._save_to_context()
+
+        # 4. Load incoming state
+        self._active_project_index = index
+        self._load_from_context(index)
+
+        # 5. Refresh all UI panels
+        self.right_panel.palette_panel.palette = self.palette
+        self.right_panel.palette_panel.refresh()
+        self.timeline_panel.set_timeline(self.timeline)
+        self.pixel_canvas.clear_overlays()
+        self.pixel_canvas.clear_selection()
+        self.pixel_canvas.clear_floating()
+        self.pixel_canvas.clear_rotation_handles()
+        self._pixel_grid_var.set(self._grid_settings.pixel_grid_visible)
+        self._custom_grid_var.set(self._grid_settings.custom_grid_visible)
+        self._update_grid_widget()
+        if hasattr(self, '_display_effects_var'):
+            self._display_effects_var.set(self._display_effects)
+        self.options_bar.update_symmetry_label(self._symmetry_mode)
+        self.options_bar.update_dither_label(self._dither_pattern)
+        if self._reference is not None:
+            self._ref_opacity_var.set(self._reference.opacity)
+        self._refresh_all()
+
+        # 6. Update title and tab bar
+        name = self._projects[index].name
+        path_display = self._project_path or name
+        self.root.title(f"RetroSprite - {path_display}")
+        self.tab_bar.set_active(index)
+
+        # 7. Emit API event
+        self.api.emit("project_switch", {"index": index})
+
+    def _next_tab(self):
+        """Switch to the next tab (wrapping)."""
+        if len(self._projects) <= 1:
+            return
+        new_idx = (self._active_project_index + 1) % len(self._projects)
+        self._switch_project(new_idx)
+
+    def _prev_tab(self):
+        """Switch to the previous tab (wrapping)."""
+        if len(self._projects) <= 1:
+            return
+        new_idx = (self._active_project_index - 1) % len(self._projects)
+        self._switch_project(new_idx)
+
+    def _on_tab_context(self, index, event):
+        """Show right-click context menu for a tab."""
+        import tkinter as tk
+        menu = tk.Menu(self.root, tearoff=0)
+        menu.add_command(label="Close", command=lambda: self._close_project(index))
+        menu.add_command(label="Close Others",
+                         command=lambda: self._close_others(index))
+        menu.add_command(label="Close All",
+                         command=self._close_all_projects)
+        menu.add_separator()
+        menu.add_command(label="Save", command=lambda: self._save_tab(index))
+        ctx = self._projects[index]
+        if ctx.project_path:
+            menu.add_separator()
+            menu.add_command(label="Reveal in Explorer",
+                             command=lambda: self._reveal_in_explorer(ctx.project_path))
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def _close_others(self, keep_index):
+        """Close all tabs except the one at keep_index."""
+        indices = [i for i in range(len(self._projects)) if i != keep_index]
+        for i in reversed(indices):
+            self._close_project(i)
+
+    def _save_tab(self, index):
+        """Save a specific tab's project."""
+        if index != self._active_project_index:
+            self._switch_project(index)
+        self._save_project()
+
+    def _reveal_in_explorer(self, path):
+        """Open the file's directory in the system file explorer."""
+        import subprocess
+        import os
+        if os.name == 'nt':
+            subprocess.Popen(f'explorer /select,"{path}"')
+        elif os.name == 'posix':
+            folder = os.path.dirname(path)
+            subprocess.Popen(['xdg-open', folder])
+
     # --- UI Building ---
 
     def _build_menu(self):
@@ -277,12 +517,18 @@ class RetroSpriteApp(InputHandlerMixin, FileOpsMixin, RotationMixin,
 
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="New", command=self._new_canvas)
+        file_menu.add_command(label="New", command=self._new_canvas,
+                              accelerator="Ctrl+N")
         file_menu.add_separator()
         file_menu.add_command(label="Save Project", command=self._save_project,
                               accelerator="Ctrl+S")
         file_menu.add_command(label="Save Project As...",
                               command=self._save_project_as)
+        file_menu.add_separator()
+        file_menu.add_command(label="Close", command=self._close_project,
+                              accelerator="Ctrl+W")
+        file_menu.add_command(label="Close All", command=self._close_all_projects,
+                              accelerator="Ctrl+Shift+W")
         file_menu.add_command(label="Open Project...",
                               command=self._open_project, accelerator="Ctrl+O")
         file_menu.add_separator()
@@ -542,6 +788,16 @@ class RetroSpriteApp(InputHandlerMixin, FileOpsMixin, RotationMixin,
             on_radius_change=self._on_radius_change,
             on_fill_mode_change=self._on_fill_mode_change,
         )
+        # Tab bar (above options bar)
+        self.tab_bar = TabBar(
+            self.root,
+            on_tab_select=self._switch_project,
+            on_tab_close=self._close_project,
+            on_new_tab=self._new_canvas,
+            on_tab_context=self._on_tab_context,
+        )
+        self.tab_bar.pack(side="top", fill="x")
+
         self.options_bar.pack(side="top", fill="x")
 
         # Grid widget (right side of options bar)
@@ -657,6 +913,8 @@ class RetroSpriteApp(InputHandlerMixin, FileOpsMixin, RotationMixin,
             self.root.bind(key, lambda e: self._paste_clipboard())
         for key in ("<Control-b>", "<Control-B>"):
             self.root.bind(key, lambda e: self._capture_brush())
+        for key in ("<Control-n>", "<Control-N>"):
+            self.root.bind(key, lambda e: self._new_canvas())
         for key in ("<Control-s>", "<Control-S>"):
             self.root.bind(key, lambda e: self._save_project())
         for key in ("<Control-o>", "<Control-O>"):
@@ -679,6 +937,16 @@ class RetroSpriteApp(InputHandlerMixin, FileOpsMixin, RotationMixin,
         # Tab cycles tilemap edit mode only when the active layer is a TilemapLayer
         self.root.bind("<Tab>", lambda e: self._toggle_tilemap_mode())
         self.root.bind("<Key>", lambda e: self._on_key_press(e))
+        # Tab navigation
+        for key in ("<Control-w>", "<Control-W>"):
+            self.root.bind(key, lambda e: self._close_project())
+        for key in ("<Control-Shift-w>", "<Control-Shift-W>"):
+            self.root.bind(key, lambda e: self._close_all_projects())
+        self.root.bind("<Control-Tab>", lambda e: self._next_tab())
+        self.root.bind("<Control-Shift-Tab>", lambda e: self._prev_tab())
+        for n in range(1, 10):
+            self.root.bind(f"<Control-Key-{n}>",
+                           lambda e, i=n-1: self._switch_project(i))
 
     # --- Tool Handling ---
 

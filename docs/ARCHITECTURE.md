@@ -24,6 +24,7 @@ RetroSprite is a lightweight desktop pixel art editor and animation tool built w
 | `rotation_handler.py` | **RotationMixin** — rotation mode state machine, context bar UI |
 | `tilemap_editor.py` | **TilemapEditorMixin** — tilemap layer creation, tile editing, auto-sync |
 | `layer_animation.py` | **LayerAnimationMixin** — frame/layer management, playback, onion skin, filters, effects, color mode |
+| `project_context.py` | `ProjectContext` dataclass — per-document state (timeline, palette, undo, grid) |
 | `pixel_data.py` | `PixelGrid` (RGBA) and `IndexedPixelGrid` (palette-indexed) — NumPy array backends |
 | `layer.py` | `Layer` model, `apply_blend_mode()`, `flatten_layers()` compositing |
 | `animation.py` | `Frame` (layer stack) and `AnimationTimeline` (frame sequence) |
@@ -54,6 +55,7 @@ RetroSprite is a lightweight desktop pixel art editor and animation tool built w
 | Module | Purpose |
 |--------|---------|
 | `theme.py` | Neon Retro theme colors + styling functions |
+| `tab_bar.py` | `TabBar` custom widget for multi-document tabs, with close buttons and right-click menu |
 | `toolbar.py` | Left toolbar with tool/symmetry/dither/pixel-perfect controls |
 | `right_panel.py` | Palette, color picker, layers, frames, animation preview |
 | `timeline.py` | Timeline panel (frames × layers grid, playback, onion skin) |

@@ -40,6 +40,8 @@ class FileOpsMixin:
                              symmetry_axis_x=self._symmetry_axis_x,
                              symmetry_axis_y=self._symmetry_axis_y)
                 self._dirty = False
+                if hasattr(self, 'tab_bar'):
+                    self.tab_bar.set_dirty(self._active_project_index, False)
                 self._update_status("Project saved")
                 self.api.emit("after_save", {"filepath": self._project_path})
             except Exception as e:
@@ -69,6 +71,12 @@ class FileOpsMixin:
                 self._project_path = path
                 update_recents(path)
                 self._dirty = False
+                if hasattr(self, 'tab_bar'):
+                    self.tab_bar.rename_tab(self._active_project_index, os.path.basename(path))
+                    self.tab_bar.set_tooltip(self._active_project_index, path)
+                    self.tab_bar.set_dirty(self._active_project_index, False)
+                    self._active_context.name = os.path.basename(path)
+                    self._active_context.project_path = path
                 self.root.title(f"RetroSprite - {path}")
                 self._update_status("Project saved")
                 self.api.emit("after_save", {"filepath": path})
@@ -80,9 +88,7 @@ class FileOpsMixin:
     # ------------------------------------------------------------------
 
     def _open_project(self):
-        """Open a .retro project file."""
-        if not self._check_save_before():
-            return
+        """Open a .retro project file in a new tab."""
         path = ask_open_file(
             self.root,
             filetypes=[("RetroSprite Projects", "*.retro"),
@@ -92,94 +98,99 @@ class FileOpsMixin:
         )
         if not path:
             return
+
+        # Check if already open
+        for i, ctx in enumerate(self._projects):
+            if ctx.project_path and os.path.normpath(ctx.project_path) == os.path.normpath(path):
+                self._switch_project(i)
+                return
+
         if not self.api.emit("before_load", {"filepath": path}):
             return
+
         ext = os.path.splitext(path)[1].lower()
-        if ext in ('.ase', '.aseprite'):
-            from src.aseprite_import import load_aseprite
-            try:
-                self.timeline, palette = load_aseprite(path)
-                self.palette.colors = palette.colors
-                self.palette.selected_index = 0
-            except Exception as e:
-                show_error(self.root, "Import Error", str(e))
-                return
-            loaded_ref = None
-        elif ext == '.psd':
-            from src.psd_import import load_psd
-            try:
-                self.timeline, palette = load_psd(path)
-                self.palette.colors = palette.colors
-                self.palette.selected_index = 0
-            except Exception as e:
-                show_error(self.root, "Import Error", str(e))
-                return
-            loaded_ref = None
-        else:
-            try:
-                self.timeline, self.palette, tool_settings_data, loaded_ref, grid_data = load_project(path)
-            except Exception as e:
-                show_error(self.root, "Open Error", str(e))
-                return
-        self.api.timeline = self.timeline
-        self.api.palette = self.palette
-        self._reset_state()
-        self._reference = loaded_ref
-        if self._reference is not None:
-            self._ref_opacity_var.set(self._reference.opacity)
+        try:
+            if ext in ('.ase', '.aseprite'):
+                from src.aseprite_import import load_aseprite
+                timeline, palette = load_aseprite(path)
+                pal = Palette("Pico-8")
+                pal.colors = palette.colors
+                pal.selected_index = 0
+                loaded_ref = None
+                tool_settings_data = None
+                grid_data = None
+            elif ext == '.psd':
+                from src.psd_import import load_psd
+                timeline, palette = load_psd(path)
+                pal = Palette("Pico-8")
+                pal.colors = palette.colors
+                pal.selected_index = 0
+                loaded_ref = None
+                tool_settings_data = None
+                grid_data = None
+            else:
+                timeline, pal, tool_settings_data, loaded_ref, grid_data = load_project(path)
+        except Exception as e:
+            show_error(self.root, "Open Error", str(e))
+            return
+
+        from src.project_context import ProjectContext
+        from src.grid import GridSettings
+
+        gs = None
+        sym_x = timeline.width // 2
+        sym_y = timeline.height // 2
+        ts = None
+
         if ext not in ('.ase', '.aseprite', '.psd'):
             if grid_data is not None:
-                from src.grid import GridSettings
-                self._grid_settings = GridSettings.from_dict(grid_data)
-            else:
-                from src.grid import GridSettings
-                self._grid_settings = GridSettings()
-            self._pixel_grid_var.set(self._grid_settings.pixel_grid_visible)
-            self._custom_grid_var.set(self._grid_settings.custom_grid_visible)
-            self._update_grid_widget()
-            if grid_data:
-                ax = grid_data.get("symmetry_axis_x") if isinstance(grid_data, dict) else None
-                ay = grid_data.get("symmetry_axis_y") if isinstance(grid_data, dict) else None
-                if ax is not None:
-                    self._symmetry_axis_x = ax
-                if ay is not None:
-                    self._symmetry_axis_y = ay
-            self._tool_settings = ToolSettingsManager.from_dict(tool_settings_data)
-            pen_settings = self._tool_settings.get("pen")
-            self._apply_tool_settings(pen_settings)
-        self._project_path = path
+                gs = GridSettings.from_dict(grid_data)
+                if isinstance(grid_data, dict):
+                    ax = grid_data.get("symmetry_axis_x")
+                    ay = grid_data.get("symmetry_axis_y")
+                    if ax is not None:
+                        sym_x = ax
+                    if ay is not None:
+                        sym_y = ay
+            ts = ToolSettingsManager.from_dict(tool_settings_data)
+
+        proj_path = path if ext == '.retro' else None
+        ctx = ProjectContext.from_loaded(
+            timeline=timeline, palette=pal,
+            path=path,
+            tool_settings=ts,
+            reference=loaded_ref,
+            grid_settings=gs,
+            symmetry_axis_x=sym_x,
+            symmetry_axis_y=sym_y,
+        )
+        if proj_path:
+            ctx.project_path = proj_path
+        else:
+            ctx.project_path = None
+
+        self._projects.append(ctx)
+        new_index = len(self._projects) - 1
+
         update_recents(path)
-        self.root.title(f"RetroSprite - {path}")
-        self.right_panel.palette_panel.palette = self.palette
-        self.right_panel.palette_panel.refresh()
-        self.timeline_panel.set_timeline(self.timeline)
-        self._refresh_all()
+
+        self.tab_bar.add_tab(ctx.name, activate=False)
+        self.tab_bar.set_tooltip(new_index, path)
+        self._switch_project(new_index)
         self.api.emit("after_load", {"filepath": path})
 
     def _new_canvas(self):
-        if not self._check_save_before():
-            return
+        """Create a new project in a new tab."""
         size = ask_canvas_size(self.root)
         if not size:
             return
         w, h = size
-        self._reset_state()
-        from src.grid import GridSettings
-        self._grid_settings = GridSettings()
-        self._pixel_grid_var.set(True)
-        self._custom_grid_var.set(False)
-        self._update_grid_widget()
-        self._reference = None
-        self.timeline = AnimationTimeline(w, h)
-        self._symmetry_axis_x = self.timeline.width // 2
-        self._symmetry_axis_y = self.timeline.height // 2
-        self.palette = Palette("Pico-8")
-        self._project_path = None
-        self.root.title("RetroSprite - Pixel Art Creator")
-        self.right_panel.palette_panel.palette = self.palette
-        self.right_panel.palette_panel.refresh()
-        self.timeline_panel.set_timeline(self.timeline)
-        self._refresh_all()
+        from src.project_context import ProjectContext
+        ctx = ProjectContext.create_new(width=w, height=h)
+        self._projects.append(ctx)
+        new_index = len(self._projects) - 1
+        self.tab_bar.add_tab(ctx.name, activate=False)
+        self._switch_project(new_index)
 
     def _open_image(self):
         path = ask_open_file(self.root)
@@ -675,28 +686,110 @@ class FileOpsMixin:
     # ------------------------------------------------------------------
 
     def _schedule_auto_save(self):
-        if self._dirty and self._project_path:
-            try:
-                self._tool_settings.save(self.current_tool_name.lower(), self._capture_current_tool_settings())
-                save_project(self._project_path, self.timeline, self.palette,
-                             tool_settings=self._tool_settings.to_dict(),
-                             reference_image=self._reference,
-                             grid_settings=self._grid_settings.to_dict(),
-                             symmetry_axis_x=self._symmetry_axis_x,
-                             symmetry_axis_y=self._symmetry_axis_y)
-                self._update_status("Auto-saved")
-                self.root.after(2000, lambda: self._update_status(""))
-                self._dirty = False
-            except Exception:
-                pass
+        # Save active project state into its context first
+        if hasattr(self, '_projects') and self._projects:
+            self._save_to_context()
+            # Auto-save all dirty projects that have a file path
+            for ctx in self._projects:
+                if ctx.dirty and ctx.project_path:
+                    try:
+                        ts_dict = ctx.tool_settings.to_dict() if ctx.tool_settings else {}
+                        save_project(ctx.project_path, ctx.timeline, ctx.palette,
+                                     tool_settings=ts_dict,
+                                     reference_image=ctx.reference,
+                                     grid_settings=ctx.grid_settings.to_dict(),
+                                     symmetry_axis_x=ctx.symmetry_axis_x,
+                                     symmetry_axis_y=ctx.symmetry_axis_y)
+                        ctx.dirty = False
+                    except Exception:
+                        pass
+            # Sync dirty flag back for active project
+            self._dirty = self._active_context.dirty
+            if hasattr(self, 'tab_bar'):
+                for i, ctx in enumerate(self._projects):
+                    self.tab_bar.set_dirty(i, ctx.dirty)
+            self._update_status("Auto-saved")
+            self.root.after(2000, lambda: self._update_status(""))
         self.root.after(self._auto_save_interval, self._schedule_auto_save)
 
     def _mark_dirty(self):
         self._dirty = True
+        if hasattr(self, 'tab_bar'):
+            self.tab_bar.set_dirty(self._active_project_index, True)
 
     # ------------------------------------------------------------------
     # Save-before guard / close / reset
     # ------------------------------------------------------------------
+
+    def _close_project(self, index=None):
+        """Close a project tab. Prompts to save if dirty."""
+        if index is None:
+            index = self._active_project_index
+
+        ctx = self._projects[index]
+
+        # Check if dirty and prompt to save
+        if ctx.dirty:
+            original_index = self._active_project_index
+            # Temporarily switch to the tab being closed so save works correctly
+            if index != self._active_project_index:
+                self._switch_project(index)
+            if not self._check_save_before():
+                # User cancelled — switch back to where they were
+                if self._active_project_index != original_index:
+                    self._switch_project(original_index)
+                return
+
+        # If this is the last tab, return to startup dialog
+        if len(self._projects) == 1:
+            self._stop_animation()
+            self._projects.clear()
+            self.tab_bar.clear()
+            from src.project_context import ProjectContext
+            ProjectContext._untitled_counter = 0
+            self._return_to_menu = True
+            self.root.destroy()
+            return
+
+        # Remove the project and tab
+        was_active = (index == self._active_project_index)
+        self._projects.pop(index)
+        self.tab_bar.remove_tab(index)
+
+        # Determine new active index
+        if index <= self._active_project_index:
+            self._active_project_index = max(0, self._active_project_index - 1)
+
+        # Only reload UI if the closed tab was the active one
+        if was_active:
+            self._load_from_context(self._active_project_index)
+            self.right_panel.palette_panel.palette = self.palette
+            self.right_panel.palette_panel.refresh()
+            self.timeline_panel.set_timeline(self.timeline)
+            self.pixel_canvas.clear_overlays()
+            self._refresh_all()
+        name = self._projects[self._active_project_index].name
+        path_display = self._project_path or name
+        self.root.title(f"RetroSprite - {path_display}")
+        self.tab_bar.set_active(self._active_project_index)
+
+    def _close_all_projects(self):
+        """Close all project tabs, prompting to save each dirty one."""
+        # Sync active project state into its context first
+        self._save_to_context()
+        for i in range(len(self._projects) - 1, -1, -1):
+            ctx = self._projects[i]
+            if ctx.dirty:
+                self._switch_project(i)
+                if not self._check_save_before():
+                    return  # User cancelled
+        self._stop_animation()
+        self._projects.clear()
+        self.tab_bar.clear()
+        from src.project_context import ProjectContext
+        ProjectContext._untitled_counter = 0
+        self._return_to_menu = True
+        self.root.destroy()
 
     def _check_save_before(self) -> bool:
         """Ask user to save before a destructive action.
@@ -744,8 +837,11 @@ class FileOpsMixin:
 
     def _on_close(self):
         """Handle window close (X button or Exit menu)."""
-        if not self._check_save_before():
-            return
+        for i, ctx in enumerate(self._projects):
+            if ctx.dirty:
+                self._switch_project(i)
+                if not self._check_save_before():
+                    return
         self._stop_animation()
         from src.plugins import unload_all_plugins
         unload_all_plugins(self._plugins, self.api)
@@ -753,8 +849,11 @@ class FileOpsMixin:
 
     def _return_to_menu_action(self):
         """Return to the startup menu instead of quitting."""
-        if not self._check_save_before():
-            return
+        for i, ctx in enumerate(self._projects):
+            if ctx.dirty:
+                self._switch_project(i)
+                if not self._check_save_before():
+                    return
         self._stop_animation()
         self._return_to_menu = True
         self.root.destroy()
